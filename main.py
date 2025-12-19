@@ -12,3 +12,15 @@ has been developed for a children's boutique.
 - Self managed static files: Stored media and databases.
 """
 
+# Import libraries
+from fastapi import FastAPI
+
+# Import modules
+from routers.auth import auth
+
+app: FastAPI = FastAPI()
+app.include_router(auth)
+
+@app.get
+async def ison():
+    return {"response": "Yes, I'm on."}
