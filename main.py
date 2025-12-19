@@ -16,10 +16,20 @@ has been developed for a children's boutique.
 from fastapi import FastAPI
 
 # Import modules
+from databases.createdb import create_sqlite_database
+from databases.singleton import init_sqlite
 from routers.auth import auth
 
 app: FastAPI = FastAPI()
 app.include_router(auth)
+
+@app.on_event("startup")
+def _startup_create_db() -> None:
+    try:
+        create_sqlite_database("databases/busy.sqlite3")
+    except FileExistsError:
+        pass
+    init_sqlite("databases/busy.sqlite3")
 
 @app.get
 async def ison():

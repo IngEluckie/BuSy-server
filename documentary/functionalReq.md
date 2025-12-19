@@ -12,8 +12,12 @@
 - Server node (But only one server is active)
 - Client mode (Server is active, but depends from other central node)
 
+## Customs
+### Print files
+- To allow access to printing utilities from LAN
+
 ## Inventory scare
-### Synchronization across cloud
+### Synchronization across cloud (wordpress)
 - From local to cloud (genesysmi.com)
 ### Synchronization across nodes
 
