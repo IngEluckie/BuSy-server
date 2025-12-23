@@ -21,10 +21,12 @@ import os
 
 # Import modules
 from databases.singleton import Database
-from routers import authentication
+from routers import authentication, userconf
 
+# Server's instance, routers & middleware.
 app: FastAPI = FastAPI()
 app.include_router(authentication.router_authentication)
+app.include_router(userconf.router_userconf)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # O especifica tu dominio 'http://localhost:5500', etc.

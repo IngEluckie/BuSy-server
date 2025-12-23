@@ -27,10 +27,10 @@ class User(BaseModel):
     birthday: datetime | None
     rfc: str | None
     cellphone: int | None
+    typeUser: int
 
 class PrivateUser(User):
     pw: str
-    typeUser: int
 
 
 """
@@ -118,6 +118,7 @@ def search_user(user_id: int) -> User | None:
             birthday=_parse_birthday(user_db.get("birthday")),
             rfc=user_db.get("rfc"),
             cellphone=user_db.get("cellphone"),
+            typeUser=user_db["user_type"],
         )
     except Exception as e:
         print(f"Error in search_user: {e}")
