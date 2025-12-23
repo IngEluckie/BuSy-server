@@ -6,11 +6,13 @@ from sqlite3 import Error
 from typing import Any, List, Tuple, Optional
 import os
 
+
+db_name: str = "systemDB.db" # Default database for BuSy
 class Database:
 
     _instance = None
     # Obtenemos la ruta del directorio don de se encuentra este script
-    _file_name: str = "systemDB.db"
+    _file_name: str = db_name
     _base_dir: str = os.path.dirname(__file__)
     # Construir la ruta absoluta al arvhido de base de datos
     _db_path: str = os.path.join(_base_dir, _file_name)
@@ -72,7 +74,18 @@ class Database:
 
     def close_connection(self):
         # Cerramos la conexión a la base de datos.
-        if self.close_connection:
-            self.connection.close()
+        connection = getattr(self, "connection", None)
+        if connection is None:
             Database._instance = None
+            return
+
+        try:
+            cursor = getattr(self, "cursor", None)
+            if cursor is not None:
+                cursor.close()
+            connection.close()
             print("Conexión a la base de datos cerrada")
+        finally:
+            Database._instance = None
+            self.connection = None
+            self.cursor = None

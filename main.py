@@ -14,23 +14,60 @@ has been developed for a children's boutique.
 
 # Import libraries
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+import os
 
 # Import modules
-from databases.createdb import create_sqlite_database
-from databases.singleton import init_sqlite
-from routers.auth import auth
+from databases.singleton import Database
+from routers import authentication
 
 app: FastAPI = FastAPI()
-app.include_router(auth)
+app.include_router(authentication.router_authentication)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # O especifica tu dominio 'http://localhost:5500', etc.
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+load_dotenv()
+
+"""
+Eventos para la base de datos
+"""
 @app.on_event("startup")
-def _startup_create_db() -> None:
-    try:
-        create_sqlite_database("databases/busy.sqlite3")
-    except FileExistsError:
-        pass
-    init_sqlite("databases/busy.sqlite3")
+def startup_event():
+    db = Database()  # Esto inicializa la conexión al iniciar la app
 
-@app.get
+@app.on_event("shutdown")
+def shutdown_event():
+    db = Database()
+    db.close_connection()
+"""
+-----------------------------
+"""
+
+@app.get("/ison")
 async def ison():
-    return {"response": "Yes, I'm on."}
+    return {
+        "message" : "Yes, I'm working!"
+    }
+
+
+#Esta parte se deja hasta el final de este script
+#  Por cómo funcionan las direcciones por defecto en FastAPI
+#app.mount("/dev", StaticFiles(directory="static/public/dev", html=True), name="dev")
+app.mount("/", StaticFiles(directory="static/public", html=True), name="public")
+#app.mount("/", StaticFiles(directory="static/public", html=True), name="static")
+
+#Documentation on Swagger: http://127.0.0.1:8000/docs
+#Documentation on Redocly: http://127.0.0.1:8000/redoc
+
+#Inicia el servidor: uvicorn server:app --reload
+#uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+# Para MacOS
+#ipconfig getifaddr en0 

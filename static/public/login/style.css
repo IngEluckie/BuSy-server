@@ -1,0 +1,339 @@
+/* BuSy Login */
+
+:root {
+  --bg0: #0b1020;
+  --bg1: #0f1730;
+  --card: rgba(255, 255, 255, 0.08);
+  --cardBorder: rgba(255, 255, 255, 0.12);
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.7);
+  --faint: rgba(255, 255, 255, 0.55);
+
+  --inputBg: rgba(255, 255, 255, 0.08);
+  --inputBorder: rgba(255, 255, 255, 0.14);
+  --inputFocus: rgba(125, 211, 252, 0.9);
+
+  --accent0: #7dd3fc;
+  --accent1: #a78bfa;
+  --danger: #fb7185;
+  --ok: #34d399;
+
+  --radius: 18px;
+  --shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg0: #f6f7fb;
+    --bg1: #eef1ff;
+    --card: rgba(255, 255, 255, 0.78);
+    --cardBorder: rgba(17, 24, 39, 0.1);
+    --text: rgba(17, 24, 39, 0.92);
+    --muted: rgba(17, 24, 39, 0.7);
+    --faint: rgba(17, 24, 39, 0.55);
+
+    --inputBg: rgba(17, 24, 39, 0.04);
+    --inputBorder: rgba(17, 24, 39, 0.12);
+    --shadow: 0 18px 60px rgba(17, 24, 39, 0.12);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+    Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  line-height: 1.35;
+  background:
+    radial-gradient(1200px 700px at 20% 10%, rgba(125, 211, 252, 0.22), transparent 60%),
+    radial-gradient(1000px 700px at 85% 20%, rgba(167, 139, 250, 0.18), transparent 55%),
+    radial-gradient(800px 520px at 50% 110%, rgba(52, 211, 153, 0.10), transparent 60%),
+    linear-gradient(180deg, var(--bg0), var(--bg1));
+}
+
+.page {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.shell {
+  width: min(1040px, 100%);
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 22px;
+  align-items: stretch;
+}
+
+.brand {
+  position: relative;
+  border-radius: var(--radius);
+  padding: 34px 30px;
+  background: linear-gradient(
+    135deg,
+    rgba(125, 211, 252, 0.16),
+    rgba(167, 139, 250, 0.14)
+  );
+  border: 1px solid var(--cardBorder);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.brand::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  background:
+    radial-gradient(400px 240px at 20% 20%, rgba(255, 255, 255, 0.20), transparent 60%),
+    radial-gradient(420px 260px at 80% 20%, rgba(255, 255, 255, 0.14), transparent 58%),
+    radial-gradient(420px 260px at 50% 90%, rgba(255, 255, 255, 0.12), transparent 60%);
+  pointer-events: none;
+  filter: blur(0.2px);
+}
+
+.brand__mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
+}
+
+.brand__title {
+  position: relative;
+  margin: 18px 0 6px;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+
+.brand__subtitle {
+  position: relative;
+  margin: 0 0 18px;
+  color: var(--muted);
+  max-width: 46ch;
+}
+
+.brand__bullets {
+  position: relative;
+  margin: 0;
+  padding: 0 0 0 18px;
+  color: var(--faint);
+}
+
+.brand__bullets li {
+  margin: 10px 0;
+}
+
+.card {
+  border-radius: var(--radius);
+  padding: 28px;
+  background: var(--card);
+  border: 1px solid var(--cardBorder);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.card__header {
+  margin-bottom: 18px;
+}
+
+.card__title {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+
+.card__hint {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.input {
+  width: 100%;
+  appearance: none;
+  border: 1px solid var(--inputBorder);
+  background: var(--inputBg);
+  border-radius: 14px;
+  padding: 12px 12px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+.input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+@media (prefers-color-scheme: light) {
+  .input::placeholder {
+    color: rgba(17, 24, 39, 0.45);
+  }
+}
+
+.input:focus {
+  border-color: rgba(125, 211, 252, 0.55);
+  box-shadow: 0 0 0 4px rgba(125, 211, 252, 0.18);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+  user-select: none;
+}
+
+.checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent0);
+}
+
+.link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--accent0);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.link[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.btn {
+  margin-top: 6px;
+  width: 100%;
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: #0b1020;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--accent0), var(--accent1));
+  box-shadow: 0 12px 30px rgba(125, 211, 252, 0.22);
+  transition: transform 90ms ease, filter 120ms ease, box-shadow 120ms ease;
+}
+
+.btn:hover {
+  filter: brightness(1.03);
+  box-shadow: 0 14px 34px rgba(125, 211, 252, 0.26);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  cursor: wait;
+  opacity: 0.85;
+  filter: grayscale(0.1);
+}
+
+.alert {
+  border-radius: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(251, 113, 133, 0.32);
+  background: rgba(251, 113, 133, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+}
+
+@media (prefers-color-scheme: light) {
+  .alert {
+    color: rgba(17, 24, 39, 0.92);
+  }
+}
+
+.footnote {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+@media (max-width: 860px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+  .brand {
+    padding: 26px 22px;
+  }
+  .card {
+    padding: 22px;
+  }
+}
+
+@media (max-width: 420px) {
+  .page {
+    padding: 16px;
+  }
+  .row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .brand__title {
+    font-size: 24px;
+  }
+}
