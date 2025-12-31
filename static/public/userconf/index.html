@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración de usuarios</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+	<body>
+	    <div class="container">
+
+	        <div class="title">
+	            <h1>Configuración de usuarios para Business System</h1>
+	            <button type="button" class="back-button">Regresar</button>
+	        </div>
+
+	        <main class="layout">
+	            <section class="panel user-panel" aria-label="Usuarios">
+	                <div class="panel-header">
+	                    <label class="label" for="user-search">Buscar usuario</label>
+	                    <div class="search-row">
+	                        <input id="user-search" class="input" type="search" placeholder="Nombre, ID, correo…" autocomplete="off">
+	                        <button type="button" class="icon-button" id="user-search-btn" aria-label="Buscar">
+	                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+	                                <path d="M10 4a6 6 0 104.472 10.03l4.249 4.25a1 1 0 001.415-1.415l-4.25-4.249A6 6 0 0010 4zm0 2a4 4 0 110 8 4 4 0 010-8z"></path>
+	                            </svg>
+	                        </button>
+	                    </div>
+	                </div>
+
+	                <div class="user-list" id="user-list" role="listbox" aria-label="Resultados"></div>
+
+	                <p class="hint" id="user-hint">La lista se llenará desde la API (pendiente).</p>
+	            </section>
+
+	            <section class="panel work-panel" aria-label="Funciones">
+	                <nav class="function-tabs" aria-label="Funciones de usuario">
+	                    <button type="button" class="tab is-active" data-view="edit">Editar usuario</button>
+	                    <button type="button" class="tab" data-view="add">Agregar usuario</button>
+	                    <button type="button" class="tab" data-view="delete">Eliminar usuario</button>
+	                    <button type="button" class="tab" data-view="badge">Generar gafete</button>
+	                    <button type="button" class="tab" data-view="docs">Documentación</button>
+	                </nav>
+
+	                <section class="function-content" id="function-content" aria-live="polite">
+	                    <div class="placeholder">
+	                        <h2 class="placeholder-title">Editar usuario</h2>
+	                        <p class="placeholder-text">Selecciona un usuario y una función para ver el módulo aquí.</p>
+	                        <div class="placeholder-box" aria-hidden="true"></div>
+	                    </div>
+	                </section>
+	            </section>
+	        </main>
+
+	    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
