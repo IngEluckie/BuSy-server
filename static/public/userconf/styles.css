@@ -14,6 +14,11 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -25,6 +30,19 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   padding: 16px;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 901px) {
+  body {
+    overflow: hidden;
+  }
+
+  .container {
+    height: 100dvh;
+  }
 }
 
 .title {
@@ -83,8 +101,10 @@ body {
   display: grid;
   grid-template-columns: 340px 1fr;
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
   padding: 0 0 16px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .panel {
@@ -100,7 +120,7 @@ body {
   padding: 14px;
   display: flex;
   flex-direction: column;
-  min-height: 560px;
+  min-height: 0;
 }
 
 .panel-header {
@@ -177,7 +197,8 @@ body {
   gap: 10px;
   overflow: auto;
   padding-right: 2px;
-  min-height: 240px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .user-state {
@@ -257,7 +278,9 @@ body {
 }
 
 .hint {
-  margin: 12px 0 0;
+  margin: 0;
+  padding-top: 12px;
+  margin-top: auto;
   font-size: 12px;
   color: var(--muted);
 }
@@ -309,8 +332,10 @@ body {
 
 .function-content {
   padding: 16px;
-  min-height: 560px;
   background: #ffffff;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .placeholder-title {
@@ -341,6 +366,279 @@ body {
   }
 
   .function-content {
-    min-height: 420px;
+    min-height: 0;
   }
+}
+
+/* --- UserConf modules --- */
+.module-root {
+  min-height: 0;
+}
+
+.work-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.uc-module {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.uc-module__header {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.uc-module__title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.uc-module__subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.uc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.uc-field label {
+  display: block;
+  font-weight: 800;
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: var(--brown-2);
+}
+
+.uc-field input,
+.uc-field select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--text);
+}
+
+.uc-field input:disabled,
+.uc-field select:disabled {
+  background: #f3f0eb;
+  color: #7b7b7b;
+}
+
+.uc-field input:focus-visible,
+.uc-field select:focus-visible {
+  outline: 3px solid rgba(107, 75, 42, 0.25);
+  outline-offset: 2px;
+}
+
+.uc-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.uc-button {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--brown-2);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 140ms ease, background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.uc-button:hover {
+  background: #f6f4f1;
+  transform: translateY(1px);
+}
+
+.uc-button:active {
+  transform: translateY(2px);
+}
+
+.uc-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+.uc-button--primary {
+  background: var(--brown);
+  border-color: rgba(0, 0, 0, 0);
+  color: #ffffff;
+}
+
+.uc-button--primary:hover {
+  background: var(--brown-2);
+}
+
+.uc-button--danger {
+  background: #8a2f2f;
+  border-color: rgba(0, 0, 0, 0);
+  color: #ffffff;
+}
+
+.uc-button--danger:hover {
+  background: #742626;
+}
+
+.uc-status {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.uc-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  background: #fbfaf8;
+}
+
+.uc-card--danger {
+  background: #fff6f6;
+  border-color: rgba(138, 47, 47, 0.2);
+}
+
+.uc-card__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+  letter-spacing: 0.2px;
+}
+
+.uc-card__value {
+  margin: 6px 0 0;
+  font-weight: 900;
+  color: var(--text);
+}
+
+.uc-card__hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.uc-split {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.uc-preview {
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, #ffffff, #fbfaf8);
+  height: 280px;
+  padding: 14px;
+}
+
+.uc-preview__inner {
+  height: 100%;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 2px dashed var(--border);
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+}
+
+.uc-preview__photo {
+  width: 96px;
+  height: 120px;
+  border-radius: 12px;
+  border: 1px solid rgba(107, 75, 42, 0.18);
+  background: linear-gradient(135deg, rgba(107, 75, 42, 0.2), #ffffff);
+}
+
+.uc-preview__meta {
+  min-width: 0;
+}
+
+.uc-preview__line {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.uc-preview__line--strong {
+  font-weight: 900;
+  font-size: 14px;
+  color: var(--text);
+}
+
+@media (max-width: 900px) {
+  .uc-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* EditUser module (legacy classnames) */
+.edit-user__header h2 {
+  margin: 0;
+}
+
+.edit-user__subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.edit-user__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.edit-user__field label {
+  display: block;
+  font-weight: 800;
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: var(--brown-2);
+}
+
+.edit-user__field input,
+.edit-user__field select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.edit-user__field input:disabled,
+.edit-user__field select:disabled {
+  background: #f3f0eb;
+  color: #7b7b7b;
+}
+
+.edit-user__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.edit-user__status {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
 }

@@ -1,4 +1,9 @@
-const API_USERS_ENDPOINT = "/api/users";
+import EditUser from "./modules/editUser.js";
+import AddUser from "./modules/addUser.js";
+import DeleteUser from "./modules/deleteUser.js";
+import GenerateBadge from "./modules/generateBadge.js";
+import UploadDocumentation from "./modules/uploadDocumentation.js";
+
 const SEARCH_USERS_ENDPOINT = "/userconf/search_byusername";
 const LOGIN_PATH = "/login/";
 
@@ -8,6 +13,16 @@ const state = {
   selectedUserInfo: null,
   searchRequestId: 0,
 };
+
+const MODULES = {
+  edit: EditUser,
+  add: AddUser,
+  delete: DeleteUser,
+  badge: GenerateBadge,
+  docs: UploadDocumentation,
+};
+
+let activeModule = null;
 
 function getAuthHeader() {
   const token = localStorage.getItem("busy_token");
@@ -35,32 +50,41 @@ function renderUserListState(message, kind = "info") {
   listEl.appendChild(el);
 }
 
-function updatePlaceholder() {
-  const content = document.getElementById("function-content");
-  const titleEl = content?.querySelector(".placeholder-title");
-  const textEl = content?.querySelector(".placeholder-text");
+function renderModuleState(message, kind = "info") {
+  const mountEl = document.getElementById("module-root");
+  if (!mountEl) return;
+  mountEl.innerHTML = "";
 
-  const activeTab = document.querySelector(".function-tabs .tab.is-active");
-  const title = activeTab?.textContent?.trim() || "Editar usuario";
-  if (titleEl) titleEl.textContent = title;
+  const el = document.createElement("div");
+  el.className = `user-state${kind === "loading" ? " is-loading" : ""}${
+    kind === "error" ? " is-error" : ""
+  }`;
+  el.textContent = message;
+  mountEl.appendChild(el);
+}
 
-  const userLabel =
-    state.selectedUserInfo?.fullname ||
-    state.selectedUsername ||
-    "un usuario";
+async function mountModule(view) {
+  const mountEl = document.getElementById("module-root");
+  if (!mountEl) return;
 
-  const copy = {
-    edit: `Modifica los datos de ${userLabel}.`,
-    add: "Crea un usuario nuevo (pendiente de definir campos).",
-    delete: `Elimina a ${userLabel} (requiere confirmación).`,
-    badge: `Genera un gafete para ${userLabel}.`,
-    docs: `Consulta o genera documentación de ${userLabel}.`,
-  };
+  try {
+    if (activeModule?.destroy) activeModule.destroy();
+  } finally {
+    activeModule = null;
+  }
 
-  if (textEl) {
-    textEl.textContent =
-      copy[state.activeView] ||
-      "Selecciona un usuario y una función para ver el módulo aquí.";
+  const ModuleClass = MODULES[view] || EditUser;
+  activeModule = new ModuleClass({
+    mount: mountEl,
+    username: state.selectedUsername,
+  });
+
+  try {
+    await activeModule.init();
+    activeModule?.setUser?.(state.selectedUsername);
+  } catch (err) {
+    const message = err?.message || "No se pudo cargar el módulo.";
+    renderModuleState(message, "error");
   }
 }
 
@@ -68,7 +92,7 @@ function setActiveTab(nextTab) {
   const tabs = document.querySelectorAll(".function-tabs .tab");
   tabs.forEach((tab) => tab.classList.toggle("is-active", tab === nextTab));
   state.activeView = nextTab?.dataset?.view || "edit";
-  updatePlaceholder();
+  mountModule(state.activeView);
 }
 
 function setSelectedUser(nextItem) {
@@ -81,8 +105,10 @@ function setSelectedUser(nextItem) {
 
   state.selectedUsername = nextItem?.dataset?.username || null;
   state.selectedUserInfo = null;
-  if (state.selectedUsername) setHint(`Usuario seleccionado: ${state.selectedUsername}`, "info");
-  updatePlaceholder();
+  if (state.selectedUsername) {
+    setHint(`Usuario seleccionado: ${state.selectedUsername}`, "info");
+  }
+  activeModule?.setUser?.(state.selectedUsername);
 }
 
 function createUserItem(username) {
@@ -133,8 +159,6 @@ function renderUserList(usernames) {
     const item = createUserItem(String(username));
     listEl.appendChild(item);
   });
-
-  updatePlaceholder();
 }
 
 async function searchUsers(username, limit = 10) {
@@ -189,7 +213,7 @@ async function runSearch() {
     state.selectedUserInfo = null;
     setHint("Escribe para buscar usuarios (vía API).", "info");
     renderUserListState("Escribe para buscar.", "info");
-    updatePlaceholder();
+    activeModule?.setUser?.(state.selectedUsername);
     return;
   }
 
@@ -221,7 +245,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const defaultTab = document.querySelector(".function-tabs .tab.is-active");
   if (defaultTab) setActiveTab(defaultTab);
-  updatePlaceholder();
 
   const input = document.getElementById("user-search");
   const searchBtn = document.getElementById("user-search-btn");

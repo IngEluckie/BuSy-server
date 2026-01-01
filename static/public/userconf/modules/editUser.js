@@ -2,14 +2,22 @@
 
 export default class EditUser {
   /**
-   * @param {Object} options
+   * @param {Object|string} options
+   * - Si es string, se interpreta como username.
    * @param {HTMLElement|string} options.mount Punto de montaje (elemento o selector)
+   * @param {string} [options.username] Usuario objetivo (si aplica)
    * @param {string} [options.apiBase] Base URL para endpoints (si aplica)
    * @param {Object} [options.initialData] Datos iniciales opcionales
    */
-  constructor({ mount, apiBase = "/userconf", initialData = null } = {}) {
+  constructor(options = {}) {
+    const normalized =
+      typeof options === "string" ? { username: options } : options || {};
+    const { mount, username = null, apiBase = "/userconf", initialData = null } =
+      normalized;
+
     this.apiBase = apiBase;
     this.mount = typeof mount === "string" ? document.querySelector(mount) : mount;
+    this.username = username;
     this.state = {
       loading: false,
       saving: false,
@@ -37,28 +45,32 @@ export default class EditUser {
 
   // --- Render ---
   template() {
+    const hasUser = Boolean(this.username);
     // Mantén esto como HTML string para que la clase "contenga el html"
     return `
-      <section class="edit-user">
+      <section class="uc-module edit-user" aria-label="Editar usuario">
         <header class="edit-user__header">
-          <h2>Configuración de usuario</h2>
-          <p class="edit-user__subtitle">Edita tus preferencias</p>
+          <h2>Editar usuario</h2>
+          <p class="edit-user__subtitle">
+            Usuario seleccionado:
+            <strong data-role="selected-user">${hasUser ? this.escape(this.username) : "Ninguno"}</strong>
+          </p>
         </header>
 
         <form class="edit-user__form" data-role="form">
           <div class="edit-user__field">
             <label for="eu-username">Usuario</label>
-            <input id="eu-username" name="username" type="text" autocomplete="username" />
+            <input id="eu-username" name="username" type="text" autocomplete="username" ${hasUser ? "" : "disabled"} />
           </div>
 
           <div class="edit-user__field">
             <label for="eu-email">Email</label>
-            <input id="eu-email" name="email" type="email" autocomplete="email" />
+            <input id="eu-email" name="email" type="email" autocomplete="email" ${hasUser ? "" : "disabled"} />
           </div>
 
           <div class="edit-user__field">
             <label for="eu-theme">Tema</label>
-            <select id="eu-theme" name="theme">
+            <select id="eu-theme" name="theme" ${hasUser ? "" : "disabled"}>
               <option value="system">Sistema</option>
               <option value="light">Claro</option>
               <option value="dark">Oscuro</option>
@@ -66,8 +78,8 @@ export default class EditUser {
           </div>
 
           <div class="edit-user__actions">
-            <button type="button" data-role="reset">Reiniciar</button>
-            <button type="submit" data-role="save">Guardar</button>
+            <button type="button" class="uc-button" data-role="reset" ${hasUser ? "" : "disabled"}>Reiniciar</button>
+            <button type="submit" class="uc-button uc-button--primary" data-role="save" ${hasUser ? "" : "disabled"}>Guardar</button>
           </div>
 
           <p class="edit-user__status" data-role="status" aria-live="polite"></p>
@@ -86,6 +98,7 @@ export default class EditUser {
   cacheDom() {
     this.form = this.mount.querySelector('[data-role="form"]');
     this.statusEl = this.mount.querySelector('[data-role="status"]');
+    this.selectedUserEl = this.mount.querySelector('[data-role="selected-user"]');
 
     this.inputs = {
       username: this.mount.querySelector('#eu-username'),
@@ -133,7 +146,7 @@ export default class EditUser {
       // const data = await res.json();
 
       const data = this.state.data ?? {
-        username: "",
+        username: this.username ?? "",
         email: "",
         theme: "system",
       };
@@ -220,5 +233,33 @@ export default class EditUser {
 
   setStatus(message) {
     if (this.statusEl) this.statusEl.textContent = message || "";
+  }
+
+  setUser(username) {
+    this.username = username || null;
+    if (this.selectedUserEl) {
+      this.selectedUserEl.textContent = this.username || "Ninguno";
+    }
+    if (this.inputs.username) this.inputs.username.value = this.username || "";
+    const disabled = !this.username;
+    this.form?.toggleAttribute("data-disabled", disabled);
+    Object.values(this.inputs).forEach((el) => {
+      if (!el) return;
+      el.disabled = disabled;
+    });
+    Object.values(this.buttons).forEach((el) => {
+      if (!el) return;
+      el.disabled = disabled;
+    });
+    this.setStatus(disabled ? "Selecciona un usuario para editar." : "");
+  }
+
+  escape(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
   }
 }
