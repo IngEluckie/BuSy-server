@@ -64,17 +64,48 @@ export default class EditUser {
           </div>
 
           <div class="edit-user__field">
+            <label for="eu-fullname">Nombre completo</label>
+            <input id="eu-fullname" name="fullname" type="text" autocomplete="name" ${hasUser ? "" : "disabled"} />
+          </div>
+
+          <div class="edit-user__field">
+            <label for="eu-birthday">Cumpleaños</label>
+            <input id="eu-birthday" name="birthday" type="date" autocomplete="bday" ${hasUser ? "" : "disabled"} />
+          </div>
+
+          <div class="edit-user__field">
+            <label for="eu-rfc">RFC</label>
+            <input id="eu-rfc" name="rfc" type="text" autocomplete="off" ${hasUser ? "" : "disabled"} />
+          </div>
+
+          <div class="edit-user__field">
+            <label for="eu-cellphone">Celular</label>
+            <input id="eu-cellphone" name="cellphone" type="tel" autocomplete="tel" ${hasUser ? "" : "disabled"} />
+          </div>
+
+          <div class="edit-user__field">
             <label for="eu-email">Email</label>
             <input id="eu-email" name="email" type="email" autocomplete="email" ${hasUser ? "" : "disabled"} />
           </div>
 
           <div class="edit-user__field">
-            <label for="eu-theme">Tema</label>
-            <select id="eu-theme" name="theme" ${hasUser ? "" : "disabled"}>
-              <option value="system">Sistema</option>
-              <option value="light">Claro</option>
-              <option value="dark">Oscuro</option>
+            <label for="eu-type-user">Tipo de usuario</label>
+            <select id="eu-type-user" name="typeUser" ${hasUser ? "" : "disabled"}>
+              <option value="">Selecciona un tipo</option>
+              <option value="1">superadmin</option>
+              <option value="2">admin</option>
+              <option value="3">manager</option>
+              <option value="4">vendor</option>
+              <option value="5">customer</option>
             </select>
+          </div>
+
+          <div class="edit-user__field">
+            <label for="eu-password">Contraseña</label>
+            <div class="edit-user__password">
+              <input id="eu-password" name="pw" type="password" autocomplete="new-password" placeholder="******" ${hasUser ? "" : "disabled"} />
+              <button type="button" class="uc-button" data-role="toggle-password" ${hasUser ? "" : "disabled"} aria-pressed="false">Ver</button>
+            </div>
           </div>
 
           <div class="edit-user__actions">
@@ -102,13 +133,19 @@ export default class EditUser {
 
     this.inputs = {
       username: this.mount.querySelector('#eu-username'),
+      fullname: this.mount.querySelector('#eu-fullname'),
+      birthday: this.mount.querySelector('#eu-birthday'),
+      rfc: this.mount.querySelector('#eu-rfc'),
+      cellphone: this.mount.querySelector('#eu-cellphone'),
       email: this.mount.querySelector('#eu-email'),
-      theme: this.mount.querySelector('#eu-theme'),
+      typeUser: this.mount.querySelector('#eu-type-user'),
+      pw: this.mount.querySelector('#eu-password'),
     };
 
     this.buttons = {
       reset: this.mount.querySelector('[data-role="reset"]'),
       save: this.mount.querySelector('[data-role="save"]'),
+      togglePassword: this.mount.querySelector('[data-role="toggle-password"]'),
     };
   }
 
@@ -123,9 +160,11 @@ export default class EditUser {
     };
 
     this._onReset = () => this.handleReset();
+    this._onTogglePassword = () => this.togglePassword();
 
     this.form?.addEventListener("submit", this._onSubmit);
     this.buttons.reset?.addEventListener("click", this._onReset);
+    this.buttons.togglePassword?.addEventListener("click", this._onTogglePassword);
   }
 
   unbindEvents() {
@@ -134,6 +173,7 @@ export default class EditUser {
 
     this.form?.removeEventListener("submit", this._onSubmit);
     this.buttons.reset?.removeEventListener("click", this._onReset);
+    this.buttons.togglePassword?.removeEventListener("click", this._onTogglePassword);
   }
 
   // --- Data flow ---
@@ -147,8 +187,13 @@ export default class EditUser {
 
       const data = this.state.data ?? {
         username: this.username ?? "",
+        fullname: "",
+        birthday: "",
+        rfc: "",
+        cellphone: "",
         email: "",
-        theme: "system",
+        typeUser: "",
+        pw: "",
       };
 
       this.state.data = data;
@@ -174,19 +219,31 @@ export default class EditUser {
 
     this.setSaving(true);
     try {
-      // TODO: reemplazar por fetch real
-      // const res = await fetch(`${this.apiBase}/me`, {
-      //   method: "PUT",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify(payload),
-      // });
-      // if (!res.ok) throw new Error("Save failed");
+      const auth = this.getAuthHeader();
+      if (!auth) {
+        throw new Error("Necesitas iniciar sesión para guardar cambios.");
+      }
+
+      const baseUrl = window.location.origin;
+      const encodedUserinfo = encodeURIComponent(JSON.stringify(payload));
+      const url = `${baseUrl}${this.apiBase}/edit_user:${encodedUserinfo}`;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: auth },
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg = data?.detail || "No se pudo guardar.";
+        throw new Error(msg);
+      }
 
       this.state.data = payload;
-      this.setStatus("Guardado.");
+      this.setStatus(data?.message || "Guardado.");
     } catch (err) {
       this.state.error = err;
-      this.setStatus("No se pudo guardar.");
+      this.setStatus(err?.message || "No se pudo guardar.");
     } finally {
       this.setSaving(false);
     }
@@ -201,23 +258,39 @@ export default class EditUser {
   readForm() {
     return {
       username: (this.inputs.username?.value ?? "").trim(),
+      fullname: (this.inputs.fullname?.value ?? "").trim(),
+      birthday: this.inputs.birthday?.value ?? "",
+      rfc: (this.inputs.rfc?.value ?? "").trim(),
+      cellphone: (this.inputs.cellphone?.value ?? "").trim(),
       email: (this.inputs.email?.value ?? "").trim(),
-      theme: this.inputs.theme?.value ?? "system",
+      typeUser: (this.inputs.typeUser?.value ?? "").trim(),
+      pw: this.inputs.pw?.value ?? "",
     };
   }
 
   syncFormFromState() {
     const data = this.state.data || {};
     if (this.inputs.username) this.inputs.username.value = data.username ?? "";
+    if (this.inputs.fullname) this.inputs.fullname.value = data.fullname ?? "";
+    if (this.inputs.birthday) this.inputs.birthday.value = data.birthday ?? "";
+    if (this.inputs.rfc) this.inputs.rfc.value = data.rfc ?? "";
+    if (this.inputs.cellphone) this.inputs.cellphone.value = data.cellphone ?? "";
     if (this.inputs.email) this.inputs.email.value = data.email ?? "";
-    if (this.inputs.theme) this.inputs.theme.value = data.theme ?? "system";
+    if (this.inputs.typeUser) this.inputs.typeUser.value = data.typeUser ?? "";
+    if (this.inputs.pw) this.inputs.pw.value = data.pw ?? "";
   }
 
   validate(payload) {
     // TODO: reglas reales
     if (!payload.username) return "El usuario es obligatorio.";
-    if (!payload.email) return "El email es obligatorio.";
     return null;
+  }
+
+  getAuthHeader() {
+    const token = localStorage.getItem("busy_token");
+    const tokenType = localStorage.getItem("busy_token_type") || "bearer";
+    if (!token) return null;
+    return `${tokenType} ${token}`;
   }
 
   // --- UI state ---
@@ -241,6 +314,7 @@ export default class EditUser {
       this.selectedUserEl.textContent = this.username || "Ninguno";
     }
     if (this.inputs.username) this.inputs.username.value = this.username || "";
+    if (this.inputs.pw) this.inputs.pw.value = "";
     const disabled = !this.username;
     this.form?.toggleAttribute("data-disabled", disabled);
     Object.values(this.inputs).forEach((el) => {
@@ -252,6 +326,30 @@ export default class EditUser {
       el.disabled = disabled;
     });
     this.setStatus(disabled ? "Selecciona un usuario para editar." : "");
+  }
+
+  setData(data) {
+    if (!data) return;
+    this.state.data = {
+      username: this.username ?? "",
+      fullname: "",
+      birthday: "",
+      rfc: "",
+      cellphone: "",
+      email: "",
+      typeUser: "",
+      pw: "",
+      ...data,
+    };
+    this.syncFormFromState();
+  }
+
+  togglePassword() {
+    if (!this.inputs.pw || !this.buttons.togglePassword) return;
+    const isHidden = this.inputs.pw.type === "password";
+    this.inputs.pw.type = isHidden ? "text" : "password";
+    this.buttons.togglePassword.textContent = isHidden ? "Ocultar" : "Ver";
+    this.buttons.togglePassword.setAttribute("aria-pressed", String(isHidden));
   }
 
   escape(value) {

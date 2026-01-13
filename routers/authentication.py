@@ -27,6 +27,7 @@ class User(BaseModel):
     birthday: datetime | None
     rfc: str | None
     cellphone: int | None
+    email: str | None
     typeUser: int
 
 class PrivateUser(User):
@@ -97,6 +98,7 @@ def search_private_user(username: str) -> PrivateUser | None:
             birthday=_parse_birthday(user_db.get("birthday")),
             rfc=user_db.get("rfc"),
             cellphone=user_db.get("cellphone"),
+            email=user_db.get("email"),
             pw=user_db["password"],
             typeUser=user_db["user_type"],
         )
@@ -118,6 +120,7 @@ def search_user(user_id: int) -> User | None:
             birthday=_parse_birthday(user_db.get("birthday")),
             rfc=user_db.get("rfc"),
             cellphone=user_db.get("cellphone"),
+            email=user_db.get("email"),
             typeUser=user_db["user_type"],
         )
     except Exception as e:
@@ -214,4 +217,6 @@ async def get_user_info(
         birthday=other.birthday,
         rfc=other.rfc,
         cellphone=other.cellphone,
+        email=other.email,
+        typeUser=other.typeUser,
     )

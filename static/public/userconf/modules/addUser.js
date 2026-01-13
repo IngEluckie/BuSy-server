@@ -28,7 +28,7 @@ export default class AddUser {
       <section class="uc-module add-user" aria-label="Agregar usuario">
         <header class="uc-module__header">
           <h2 class="uc-module__title">Agregar usuario</h2>
-          <p class="uc-module__subtitle">Crea un usuario nuevo (pendiente de integrar API).</p>
+          <p class="uc-module__subtitle">Crea un usuario nuevo.</p>
         </header>
 
         <form class="uc-form" data-role="form">
@@ -43,14 +43,40 @@ export default class AddUser {
           </div>
 
           <div class="uc-field">
+            <label for="au-birthday">Cumpleanos</label>
+            <input id="au-birthday" name="birthday" type="date" autocomplete="bday" />
+          </div>
+
+          <div class="uc-field">
+            <label for="au-rfc">RFC</label>
+            <input id="au-rfc" name="rfc" type="text" autocomplete="off" />
+          </div>
+
+          <div class="uc-field">
+            <label for="au-cellphone">Celular</label>
+            <input id="au-cellphone" name="cellphone" type="tel" autocomplete="tel" />
+          </div>
+
+          <div class="uc-field">
+            <label for="au-email">Email</label>
+            <input id="au-email" name="email" type="email" autocomplete="email" />
+          </div>
+
+          <div class="uc-field">
             <label for="au-type">Tipo</label>
             <select id="au-type" name="typeUser">
-              <option value="3">manager</option>
-              <option value="2">admin</option>
+              <option value="">Selecciona un tipo</option>
               <option value="1">superadmin</option>
+              <option value="2">admin</option>
+              <option value="3">manager</option>
               <option value="4">vendor</option>
               <option value="5">customer</option>
             </select>
+          </div>
+
+          <div class="uc-field">
+            <label for="au-password">Contrasena</label>
+            <input id="au-password" name="pw" type="password" autocomplete="new-password" placeholder="******" />
           </div>
 
           <div class="uc-actions">
@@ -78,7 +104,7 @@ export default class AddUser {
 
     this._onSubmit = (e) => {
       e.preventDefault();
-      this.setStatus("Pendiente: implementar creación vía API.");
+      this.handleSubmit();
     };
 
     this._onReset = () => {
@@ -97,8 +123,72 @@ export default class AddUser {
     this.resetBtn?.removeEventListener("click", this._onReset);
   }
 
+  async handleSubmit() {
+    const payload = this.readForm();
+    const validationError = this.validate(payload);
+    if (validationError) {
+      this.setStatus(validationError);
+      return;
+    }
+
+    try {
+      const auth = this.getAuthHeader();
+      if (!auth) {
+        throw new Error("Necesitas iniciar sesión para crear usuarios.");
+      }
+
+      const baseUrl = window.location.origin;
+      const encodedUserinfo = encodeURIComponent(JSON.stringify(payload));
+      const url = `${baseUrl}${this.apiBase}/create_user:${encodedUserinfo}`;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: auth },
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg = data?.detail || "No se pudo crear el usuario.";
+        throw new Error(msg);
+      }
+
+      this.form?.reset();
+      this.setStatus(data?.message || "Usuario creado.");
+    } catch (err) {
+      this.setStatus(err?.message || "No se pudo crear el usuario.");
+    }
+  }
+
+  readForm() {
+    const formData = new FormData(this.form);
+    return {
+      username: (formData.get("username") || "").trim(),
+      fullname: (formData.get("fullname") || "").trim(),
+      birthday: formData.get("birthday") || "",
+      rfc: (formData.get("rfc") || "").trim(),
+      cellphone: (formData.get("cellphone") || "").trim(),
+      email: (formData.get("email") || "").trim(),
+      typeUser: (formData.get("typeUser") || "").trim(),
+      pw: (formData.get("pw") || "").trim(),
+    };
+  }
+
+  validate(payload) {
+    if (!payload.username) return "El usuario es obligatorio.";
+    if (!payload.fullname) return "El nombre completo es obligatorio.";
+    if (!payload.typeUser) return "Selecciona el tipo de usuario.";
+    if (!payload.pw) return "La contraseña es obligatoria.";
+    return null;
+  }
+
+  getAuthHeader() {
+    const token = localStorage.getItem("busy_token");
+    const tokenType = localStorage.getItem("busy_token_type") || "bearer";
+    if (!token) return null;
+    return `${tokenType} ${token}`;
+  }
+
   setStatus(message) {
     if (this.statusEl) this.statusEl.textContent = message || "";
   }
 }
-

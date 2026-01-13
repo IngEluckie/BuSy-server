@@ -12,6 +12,7 @@ const state = {
   selectedUsername: null,
   selectedUserInfo: null,
   searchRequestId: 0,
+  selectedUserRequestId: 0,
 };
 
 const MODULES = {
@@ -82,6 +83,9 @@ async function mountModule(view) {
   try {
     await activeModule.init();
     activeModule?.setUser?.(state.selectedUsername);
+    if (state.selectedUserInfo) {
+      activeModule?.setData?.(state.selectedUserInfo);
+    }
   } catch (err) {
     const message = err?.message || "No se pudo cargar el módulo.";
     renderModuleState(message, "error");
@@ -95,7 +99,7 @@ function setActiveTab(nextTab) {
   mountModule(state.activeView);
 }
 
-function setSelectedUser(nextItem) {
+async function setSelectedUser(nextItem) {
   const items = document.querySelectorAll(".user-list .user-item");
   items.forEach((item) => {
     const selected = item === nextItem;
@@ -105,10 +109,35 @@ function setSelectedUser(nextItem) {
 
   state.selectedUsername = nextItem?.dataset?.username || null;
   state.selectedUserInfo = null;
+  const requestId = ++state.selectedUserRequestId;
   if (state.selectedUsername) {
     setHint(`Usuario seleccionado: ${state.selectedUsername}`, "info");
   }
   activeModule?.setUser?.(state.selectedUsername);
+
+  if (!state.selectedUsername) return;
+
+  activeModule?.setLoading?.(true);
+  try {
+    const data = await fetchUserInfo(state.selectedUsername);
+    if (requestId !== state.selectedUserRequestId) return;
+    if (!data) {
+      setHint("No se encontró información del usuario.", "error");
+      activeModule?.setStatus?.("No se encontró información del usuario.");
+      return;
+    }
+    state.selectedUserInfo = data;
+    activeModule?.setData?.(data);
+  } catch (err) {
+    if (requestId !== state.selectedUserRequestId) return;
+    const message = err?.message || "No se pudo cargar la información.";
+    setHint(message, "error");
+    activeModule?.setStatus?.(message);
+  } finally {
+    if (requestId === state.selectedUserRequestId) {
+      activeModule?.setLoading?.(false);
+    }
+  }
 }
 
 function createUserItem(username) {
@@ -161,6 +190,24 @@ function renderUserList(usernames) {
   });
 }
 
+function removeUserFromList(username) {
+  if (!username) return;
+  const listEl = document.getElementById("user-list");
+  if (!listEl) return;
+
+  let removed = false;
+  document.querySelectorAll(".user-list .user-item").forEach((item) => {
+    if (item.dataset.username === username) {
+      item.remove();
+      removed = true;
+    }
+  });
+
+  if (removed && listEl.children.length === 0) {
+    renderUserListState("Sin resultados.", "info");
+  }
+}
+
 async function searchUsers(username, limit = 10) {
   const baseUrl = window.location.origin;
   const auth = getAuthHeader();
@@ -193,6 +240,39 @@ async function searchUsers(username, limit = 10) {
   }
 
   return Array.isArray(data) ? data : [];
+}
+
+async function fetchUserInfo(username) {
+  const baseUrl = window.location.origin;
+  const auth = getAuthHeader();
+  if (!auth) {
+    throw new Error("Necesitas iniciar sesión para ver la información.");
+  }
+
+  const url = new URL(
+    `${baseUrl}/userconf/get_userinfo/${encodeURIComponent(username)}`
+  );
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: { Authorization: auth },
+  });
+
+  if (res.status === 401) {
+    setHint("Sesión expirada. Redirigiendo a login…", "error");
+    setTimeout(() => {
+      window.location.href = new URL(LOGIN_PATH, baseUrl).toString();
+    }, 400);
+    return null;
+  }
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = data?.detail || "No se pudo cargar la información del usuario.";
+    throw new Error(msg);
+  }
+
+  return data;
 }
 
 function debounce(fn, delayMs) {
@@ -256,4 +336,16 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Enter") runSearch();
   });
   searchBtn?.addEventListener("click", runSearch);
+
+  window.addEventListener("userconf:deleted", (event) => {
+    const deletedUsername = event?.detail?.username;
+    if (!deletedUsername) return;
+    removeUserFromList(deletedUsername);
+    if (state.selectedUsername === deletedUsername) {
+      state.selectedUsername = null;
+      state.selectedUserInfo = null;
+      setHint("Usuario eliminado.", "info");
+      activeModule?.setUser?.(null);
+    }
+  });
 });

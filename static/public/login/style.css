@@ -1,41 +1,26 @@
 /* BuSy Login */
 
 :root {
-  --bg0: #0b1020;
-  --bg1: #0f1730;
-  --card: rgba(255, 255, 255, 0.08);
-  --cardBorder: rgba(255, 255, 255, 0.12);
-  --text: rgba(255, 255, 255, 0.92);
-  --muted: rgba(255, 255, 255, 0.7);
-  --faint: rgba(255, 255, 255, 0.55);
+  /* Palette from /userconf */
+  --bg0: #f4f1ec;
+  --bg1: #f4f1ec;
+  --card: #ffffff;
+  --cardBorder: #e6dfd6;
+  --text: #1e1e1e;
+  --muted: #6c6c6c;
+  --faint: #6c6c6c;
 
-  --inputBg: rgba(255, 255, 255, 0.08);
-  --inputBorder: rgba(255, 255, 255, 0.14);
-  --inputFocus: rgba(125, 211, 252, 0.9);
+  --inputBg: #fbfaf8;
+  --inputBorder: #e6dfd6;
+  --inputFocus: rgba(107, 75, 42, 0.35);
 
-  --accent0: #7dd3fc;
-  --accent1: #a78bfa;
-  --danger: #fb7185;
-  --ok: #34d399;
+  --accent0: #6b4b2a;
+  --accent1: #5a3f23;
+  --danger: #8a2f2f;
+  --ok: #2f7a52;
 
   --radius: 18px;
-  --shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg0: #f6f7fb;
-    --bg1: #eef1ff;
-    --card: rgba(255, 255, 255, 0.78);
-    --cardBorder: rgba(17, 24, 39, 0.1);
-    --text: rgba(17, 24, 39, 0.92);
-    --muted: rgba(17, 24, 39, 0.7);
-    --faint: rgba(17, 24, 39, 0.55);
-
-    --inputBg: rgba(17, 24, 39, 0.04);
-    --inputBorder: rgba(17, 24, 39, 0.12);
-    --shadow: 0 18px 60px rgba(17, 24, 39, 0.12);
-  }
+  --shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
 }
 
 *,
@@ -55,11 +40,7 @@ body {
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
     Arial, "Apple Color Emoji", "Segoe UI Emoji";
   line-height: 1.35;
-  background:
-    radial-gradient(1200px 700px at 20% 10%, rgba(125, 211, 252, 0.22), transparent 60%),
-    radial-gradient(1000px 700px at 85% 20%, rgba(167, 139, 250, 0.18), transparent 55%),
-    radial-gradient(800px 520px at 50% 110%, rgba(52, 211, 153, 0.10), transparent 60%),
-    linear-gradient(180deg, var(--bg0), var(--bg1));
+  background: var(--bg0);
 }
 
 .page {
@@ -67,6 +48,7 @@ body {
   display: grid;
   place-items: center;
   padding: 24px;
+  background: transparent;
 }
 
 .shell {
@@ -83,8 +65,8 @@ body {
   padding: 34px 30px;
   background: linear-gradient(
     135deg,
-    rgba(125, 211, 252, 0.16),
-    rgba(167, 139, 250, 0.14)
+    rgba(107, 75, 42, 0.10),
+    rgba(90, 63, 35, 0.08)
   );
   border: 1px solid var(--cardBorder);
   box-shadow: var(--shadow);
@@ -96,9 +78,9 @@ body {
   position: absolute;
   inset: -2px;
   background:
-    radial-gradient(400px 240px at 20% 20%, rgba(255, 255, 255, 0.20), transparent 60%),
-    radial-gradient(420px 260px at 80% 20%, rgba(255, 255, 255, 0.14), transparent 58%),
-    radial-gradient(420px 260px at 50% 90%, rgba(255, 255, 255, 0.12), transparent 60%);
+    radial-gradient(400px 240px at 20% 20%, rgba(107, 75, 42, 0.10), transparent 60%),
+    radial-gradient(420px 260px at 80% 20%, rgba(90, 63, 35, 0.08), transparent 58%),
+    radial-gradient(420px 260px at 50% 90%, rgba(0, 0, 0, 0.04), transparent 60%);
   pointer-events: none;
   filter: blur(0.2px);
 }
@@ -111,11 +93,11 @@ body {
   width: 64px;
   height: 64px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--cardBorder);
   font-weight: 700;
   letter-spacing: 0.02em;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
 }
 
 .brand__title {
@@ -149,8 +131,6 @@ body {
   background: var(--card);
   border: 1px solid var(--cardBorder);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 .card__header {
@@ -188,7 +168,7 @@ body {
 
 .label {
   font-size: 13px;
-  color: var(--muted);
+  color: var(--accent1);
 }
 
 .input {
@@ -204,18 +184,12 @@ body {
 }
 
 .input::placeholder {
-  color: rgba(255, 255, 255, 0.45);
-}
-
-@media (prefers-color-scheme: light) {
-  .input::placeholder {
-    color: rgba(17, 24, 39, 0.45);
-  }
+  color: rgba(108, 108, 108, 0.9);
 }
 
 .input:focus {
-  border-color: rgba(125, 211, 252, 0.55);
-  box-shadow: 0 0 0 4px rgba(125, 211, 252, 0.18);
+  border-color: rgba(107, 75, 42, 0.45);
+  box-shadow: 0 0 0 4px rgba(107, 75, 42, 0.16);
 }
 
 .row {
@@ -268,18 +242,18 @@ body {
   border: 0;
   border-radius: 14px;
   padding: 12px 14px;
-  color: #0b1020;
+  color: #ffffff;
   font-weight: 700;
   letter-spacing: 0.01em;
   cursor: pointer;
   background: linear-gradient(135deg, var(--accent0), var(--accent1));
-  box-shadow: 0 12px 30px rgba(125, 211, 252, 0.22);
+  box-shadow: 0 12px 24px rgba(107, 75, 42, 0.22);
   transition: transform 90ms ease, filter 120ms ease, box-shadow 120ms ease;
 }
 
 .btn:hover {
   filter: brightness(1.03);
-  box-shadow: 0 14px 34px rgba(125, 211, 252, 0.26);
+  box-shadow: 0 14px 28px rgba(107, 75, 42, 0.26);
 }
 
 .btn:active {
@@ -295,16 +269,10 @@ body {
 .alert {
   border-radius: 14px;
   padding: 10px 12px;
-  border: 1px solid rgba(251, 113, 133, 0.32);
-  background: rgba(251, 113, 133, 0.12);
-  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(138, 47, 47, 0.22);
+  background: #fff4f4;
+  color: #8a2f2f;
   font-size: 13px;
-}
-
-@media (prefers-color-scheme: light) {
-  .alert {
-    color: rgba(17, 24, 39, 0.92);
-  }
 }
 
 .footnote {

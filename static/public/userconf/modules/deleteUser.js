@@ -27,7 +27,9 @@ export default class DeleteUser {
 
   setUser(username) {
     this.username = username || null;
+    this.unbindEvents();
     this.render();
+    this.bindEvents();
   }
 
   template() {
@@ -76,7 +78,7 @@ export default class DeleteUser {
     this._onCancel = () => this.setStatus("");
     this._onConfirm = () => {
       if (!this.username) return;
-      this.setStatus("Pendiente: implementar eliminación vía API.");
+      this.handleDelete();
     };
 
     this.cancelBtn?.addEventListener("click", this._onCancel);
@@ -88,6 +90,49 @@ export default class DeleteUser {
     this._bound = false;
     this.cancelBtn?.removeEventListener("click", this._onCancel);
     this.confirmBtn?.removeEventListener("click", this._onConfirm);
+  }
+
+  async handleDelete() {
+    try {
+      const auth = this.getAuthHeader();
+      if (!auth) {
+        throw new Error("Necesitas iniciar sesión para eliminar usuarios.");
+      }
+
+      const baseUrl = window.location.origin;
+      const url = `${baseUrl}${this.apiBase}/delete_user:${encodeURIComponent(
+        this.username
+      )}`;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: auth },
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg = data?.detail || "No se pudo eliminar el usuario.";
+        throw new Error(msg);
+      }
+
+      const deletedUsername = this.username;
+      this.setStatus(data?.message || "Usuario eliminado.");
+      this.setUser(null);
+      window.dispatchEvent(
+        new CustomEvent("userconf:deleted", {
+          detail: { username: deletedUsername },
+        })
+      );
+    } catch (err) {
+      this.setStatus(err?.message || "No se pudo eliminar el usuario.");
+    }
+  }
+
+  getAuthHeader() {
+    const token = localStorage.getItem("busy_token");
+    const tokenType = localStorage.getItem("busy_token_type") || "bearer";
+    if (!token) return null;
+    return `${tokenType} ${token}`;
   }
 
   setStatus(message) {
@@ -103,4 +148,3 @@ export default class DeleteUser {
       .replaceAll("'", "&#39;");
   }
 }
-
