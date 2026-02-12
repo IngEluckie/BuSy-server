@@ -4,37 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "f8d0feb11e17410d",
+        "id": "f254ef7086556434",
         "type": "tabs",
         "children": [
           {
-            "id": "e61e271a261c2cad",
+            "id": "0a22402d4384522f",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Welcome.md",
+                "file": "BuSy Manager POS app/BuSy Manager POS app.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Welcome"
-            }
-          }
-        ]
-      },
-      {
-        "id": "5c966404f392839d",
-        "type": "tabs",
-        "children": [
-          {
-            "id": "51227dc8685e4563",
-            "type": "leaf",
-            "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "title": "BuSy Manager POS app"
             }
           }
         ]
@@ -89,12 +73,22 @@
               "icon": "lucide-bookmark",
               "title": "Bookmarks"
             }
+          },
+          {
+            "id": "a06deae8aedc4992",
+            "type": "leaf",
+            "state": {
+              "type": "notebook-navigator",
+              "state": {},
+              "icon": "notebook-navigator",
+              "title": "Notebook Navigator"
+            }
           }
         ]
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 267.5
   },
   "right": {
     "id": "79e441574cb2ea15",
@@ -196,11 +190,28 @@
       "daily-notes:Open today's daily note": false,
       "templates:Insert template": false,
       "command-palette:Open command palette": false,
-      "bases:Create new base": false
+      "bases:Create new base": false,
+      "obsidian-excalidraw-plugin:New drawing": false,
+      "obsidian-kanban:Create new board": false,
+      "notebook-navigator:Notebook Navigator": false,
+      "yolo:Open chat": false
     }
   },
-  "active": "e61e271a261c2cad",
+  "active": "0a22402d4384522f",
   "lastOpenFiles": [
+    "System/media/Pasted image 20260121191716.png",
+    "System/media/media.md",
+    "System/System.md",
+    "System/media",
+    "templates.md",
+    "BuSy Manager POS app/BuSy Manager POS app.md",
+    "System",
+    "System/media/Pasted image 20260121191456.png",
+    "Server/Server.md",
+    "BuSy Manager POS app",
+    "Server/Functional requirements/Functional requirements.md",
+    "Server",
+    "Server/Functional requirements",
     "Welcome.md"
   ]
 }
