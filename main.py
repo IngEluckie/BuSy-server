@@ -13,6 +13,8 @@ has been developed for a children's boutique.
 """
 
 # Import libraries
+from multiprocessing import Event, Process
+from multiprocessing.synchronize import Event as EventType
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +24,8 @@ import os
 # Import modules
 from databases.singleton import Database
 from routers import authentication, userconf
+from utilities.scheduler.Scheduler import Scheduler
+from utilities.terminalTools import CsvManager, Logger
 
 # Server's instance, routers & middleware.
 app: FastAPI = FastAPI()
@@ -37,15 +41,51 @@ app.add_middleware(
 
 load_dotenv()
 
+def run_scheduler_process(stop_event: EventType) -> None:
+    scheduler: Scheduler = Scheduler()
+    scheduler.run(stop_event=stop_event)
+
 """
 Eventos para la base de datos
 """
 @app.on_event("startup")
 def startup_event():
-    db = Database()  # Esto inicializa la conexión al iniciar la app
+    logs_doc: CsvManager = CsvManager("System_event_logs_document")
+    logger: Logger = Logger(logs_doc, debug_enabled= False)
+    logger.info("Iniciando servidor...")
+
+    try:
+        db = Database()  # Esto inicializa la conexión al iniciar la app
+        scheduler_stop_event = Event()
+        scheduler_process = Process(
+            target=run_scheduler_process,
+            args=(scheduler_stop_event,),
+            name="busy-scheduler-process",
+            daemon=True
+        )
+        scheduler_process.start()
+        app.state.scheduler_stop_event = scheduler_stop_event
+        app.state.scheduler_process = scheduler_process
+        logger.info(f"Scheduler iniciado en proceso PID={scheduler_process.pid}")
+    except Exception as e:
+        logger.error(f"¡Ups! Error encontrado: {e}")
+        pass # Siento que quiero agregarle algo más
+
+    logger.success("El servidor ha sido inicializado exitosamente...")
 
 @app.on_event("shutdown")
 def shutdown_event():
+    scheduler_stop_event = getattr(app.state, "scheduler_stop_event", None)
+    scheduler_process = getattr(app.state, "scheduler_process", None)
+
+    if scheduler_stop_event is not None:
+        scheduler_stop_event.set()
+
+    if scheduler_process is not None and scheduler_process.is_alive():
+        scheduler_process.join(timeout=5)
+        if scheduler_process.is_alive():
+            scheduler_process.terminate()
+
     db = Database()
     db.close_connection()
 """

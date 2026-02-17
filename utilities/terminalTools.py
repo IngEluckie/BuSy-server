@@ -29,7 +29,9 @@ class CsvManager:
 
     def __init__(self, filename: str, base_dir: str = "."):
         self.filename = f"{filename}.csv"
-        self.filepath = Path(base_dir) / "static" / "private" / "logs" / self.filename
+        # ¡IMPORTANTE!
+        # No olvidar modificar la ruta en caso de migración
+        self.filepath = Path(base_dir) / "static" / "private" / "systemLogs" / self.filename
 
         if not self.filepath.exists():
             print("Archivo no encontrado")
