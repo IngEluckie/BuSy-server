@@ -32,7 +32,7 @@ class Repeat(str, Enum):
     MONTHLY = "MONTHLY"
     YEARLY = "YEARLY"
 
-#now: FechaHora= FechaHora().registro
+#now: fechaHora = FechaHora().registro
 class Task(BaseModel):
     """
     Minimum unit for Schedule management
@@ -44,5 +44,5 @@ class Task(BaseModel):
     priority: Priority
     status: Status
     type: TaskType
-    is_internal: bool # Is internal activity of the system?
+    #is_internal: bool # Is internal activity of the system?
     repeat: Repeat

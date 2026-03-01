@@ -1,7 +1,13 @@
 # activityList.py
 
+# Import libraries
 from typing import Dict
 
+# Import modules
+#from node_synching.node_sync import NSync
+from utilities.projects.tasks.systemActivities.node_synching.node_sync import init_NSync
+
 ActivityList: Dict = {
-    # Y aquí un diccionario con las direcciones de las funciones más importantes
+    "systemActivities": [init_NSync,]
+
 }

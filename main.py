@@ -24,7 +24,7 @@ import os
 # Import modules
 from databases.singleton import Database
 from routers import authentication, userconf
-from utilities.scheduler.Scheduler import Scheduler
+from utilities.scheduler.scheduler import Scheduler
 from utilities.terminalTools import CsvManager, Logger
 
 # Server's instance, routers & middleware.
@@ -48,12 +48,12 @@ def run_scheduler_process(stop_event: EventType) -> None:
 """
 Eventos para la base de datos
 """
+
+logs_doc: CsvManager = CsvManager("System_event_logs_document")
+logger: Logger = Logger(logs_doc, debug_enabled= False)
+
 @app.on_event("startup")
 def startup_event():
-    logs_doc: CsvManager = CsvManager("System_event_logs_document")
-    logger: Logger = Logger(logs_doc, debug_enabled= False)
-    logger.info("Iniciando servidor...")
-
     try:
         db = Database()  # Esto inicializa la conexión al iniciar la app
         scheduler_stop_event = Event()
@@ -88,6 +88,8 @@ def shutdown_event():
 
     db = Database()
     db.close_connection()
+    logger.info("Servicio terminado... ¡Adios!")
+    
 """
 -----------------------------
 """
