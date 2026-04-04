@@ -1,52 +1,32 @@
-# scheduler.py
-
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass, field
 from datetime import datetime
 from time import sleep
 from typing import Any, Dict, Iterable, Optional, Tuple
 
-try:
-    from zoneinfo import ZoneInfo
-
-    MX_TZ = ZoneInfo("America/Mexico_City")
-except Exception:
-    MX_TZ = None
-
 from utilities.projects.tasks.systemActivities.activityList import ActivityList
+from utilities.projects.tasks.systemTask import SystemTask, now_mx
+from utilities.projects.tasks.task import Status
 from utilities.terminalTools import CsvManager, Logger
-
-
-def now_mx() -> datetime:
-    if MX_TZ:
-        return datetime.now(MX_TZ)
-    return datetime.now()
-
-
-def gen_id(prefix: str = "act") -> str:
-    timestamp = now_mx().strftime("%Y%m%d%H%M%S%f")
-    return f"{prefix}_{timestamp}"
-
-
-@dataclass
-class ScheduledActivity:
-    activity_id: str
-    name: str
-    runner: Any
-    original: Any
-    status: str = "PENDING"
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    run_count: int = 0
-    retry_count: int = 0
-    max_retries: int = 0
-    last_run_at: Optional[datetime] = None
-    last_error: Optional[str] = None
 
 
 class Scheduler:
     LOG_HEADER: Tuple[str, ...] = (
+        "record_id",
+        "timestamp",
+        "task_id",
+        "task_name",
+        "handler_name",
+        "event",
+        "status",
+        "run_count",
+        "retry_count",
+        "max_retries",
+        "next_run_at",
+        "detail",
+    )
+    LEGACY_LOG_HEADER: Tuple[str, ...] = (
         "record_id",
         "timestamp",
         "activity_id",
@@ -55,42 +35,54 @@ class Scheduler:
         "status",
         "detail",
     )
-    TERMINAL_STATUSES = {"DONE", "FAILED", "SKIPPED"}
 
     def __init__(self) -> None:
         self.schedule_doc: CsvManager = CsvManager("Scheduler_activity_logs_document")
         self.runtime_doc: CsvManager = CsvManager("Scheduler_runtime_logs_document")
         self.logger: Logger = Logger(self.runtime_doc, debug_enabled=False)
-        self.executeLoop: list[ScheduledActivity] = []
+        self.executeLoop: list[SystemTask] = []
+        self._known_task_ids: set[str] = set()
 
         self._ensure_log_header()
-        already_done = set(self._retrieveActivities())
+        snapshots = self._retrieve_task_snapshots()
 
-        for configured_name, activity_builder in self._iter_initial_activities():
+        for configured_name, task_builder in self._iter_initial_activities():
             try:
-                activity = self._build_activity(activity_builder, configured_name)
+                task = self._coerce_task(task_builder, configured_name)
             except Exception as exc:
                 self.logger.error(
-                    f"No se pudo inicializar la actividad '{configured_name or activity_builder}': {exc}"
+                    f"No se pudo inicializar la actividad '{configured_name or task_builder}': {exc}"
                 )
                 continue
 
-            if activity.name in already_done:
+            if task.task_id in self._known_task_ids:
+                self.logger.error(f"Task duplicada ignorada: {task.task_id}")
+                continue
+
+            snapshot = self._find_snapshot_for_task(task, snapshots)
+            if snapshot is not None:
+                task.restore_runtime(snapshot)
+
+            if not self._should_enqueue_task(task):
                 self.logger.info(
-                    f"Actividad omitida al iniciar porque ya estaba completada: {activity.name}"
+                    f"Actividad omitida al iniciar: {task.name} | estado={task.status.value}"
                 )
                 continue
 
-            self.executeLoop.append(activity)
-            self._log_activity_event(
-                activity,
-                event="registered",
-                status=activity.status,
-                detail="Activity registered in scheduler execute loop",
+            self.executeLoop.append(task)
+            self._known_task_ids.add(task.task_id)
+            self._log_task_event(
+                task,
+                event="restored" if snapshot else "registered",
+                detail=(
+                    "Task restored from scheduler log"
+                    if snapshot
+                    else "Task registered in scheduler execute loop"
+                ),
             )
 
         self.logger.info(
-            f"Scheduler inicializado con {len(self.executeLoop)} actividad(es) pendiente(s)"
+            f"Scheduler inicializado con {len(self.executeLoop)} tarea(s) activa(s)"
         )
 
     def _initialActivities(self) -> list:
@@ -128,183 +120,156 @@ class Scheduler:
 
         with self.schedule_doc.filepath.open("r", encoding="utf-8", newline="") as log_file:
             reader = csv.reader(log_file)
-            for raw_row in reader:
-                if not raw_row:
-                    continue
+            parsed_rows = list(reader)
 
-                while raw_row and raw_row[-1] == "":
-                    raw_row.pop()
+        if not parsed_rows:
+            return rows
 
-                if not raw_row or tuple(raw_row) == self.LOG_HEADER:
-                    continue
+        active_header = self._select_header(parsed_rows[0])
+        start_index = 1 if tuple(self._trim_row(parsed_rows[0]))[0:1] == ("record_id",) else 0
 
-                padded_row = raw_row + [""] * (len(self.LOG_HEADER) - len(raw_row))
-                row_map = dict(zip(self.LOG_HEADER, padded_row[: len(self.LOG_HEADER)]))
-                rows.append(row_map)
+        for raw_row in parsed_rows[start_index:]:
+            trimmed = self._trim_row(raw_row)
+            if not trimmed:
+                continue
+            if trimmed[0] == "record_id":
+                continue
+
+            padded = trimmed + [""] * (len(active_header) - len(trimmed))
+            mapped = dict(zip(active_header, padded[: len(active_header)]))
+            normalized = self._normalize_log_row(mapped)
+            rows.append(normalized)
 
         return rows
 
-    def _retrieveActivities(self) -> list[str]:
-        latest_status_by_activity: Dict[str, str] = {}
+    def _select_header(self, first_row: list[str]) -> Tuple[str, ...]:
+        trimmed = tuple(self._trim_row(first_row))
+        if trimmed == self.LOG_HEADER:
+            return self.LOG_HEADER
+        if trimmed == self.LEGACY_LOG_HEADER:
+            return self.LEGACY_LOG_HEADER
+        if trimmed and trimmed[0] == "record_id":
+            return tuple(trimmed)
+        return self.LEGACY_LOG_HEADER
+
+    def _trim_row(self, row: list[str]) -> list[str]:
+        trimmed = list(row)
+        while trimmed and trimmed[-1] == "":
+            trimmed.pop()
+        return trimmed
+
+    def _normalize_log_row(self, row: Dict[str, str]) -> Dict[str, str]:
+        normalized = dict(row)
+        if "activity_id" in normalized and "task_id" not in normalized:
+            normalized["task_id"] = normalized.get("activity_id", "")
+        if "activity_name" in normalized and "task_name" not in normalized:
+            normalized["task_name"] = normalized.get("activity_name", "")
+
+        normalized.setdefault("task_id", "")
+        normalized.setdefault("task_name", "")
+        normalized.setdefault("handler_name", "")
+        normalized.setdefault("event", "")
+        normalized.setdefault("status", "")
+        normalized.setdefault("run_count", "")
+        normalized.setdefault("retry_count", "")
+        normalized.setdefault("max_retries", "")
+        normalized.setdefault("next_run_at", "")
+        normalized.setdefault("detail", "")
+        return normalized
+
+    def _retrieve_task_snapshots(self) -> Dict[str, Dict[str, str]]:
+        snapshots: Dict[str, Dict[str, str]] = {}
 
         for row in self._read_log_rows():
-            activity_name = row.get("activity_name", "").strip()
-            status = row.get("status", "").strip()
-            if not activity_name:
+            key = row.get("task_id") or row.get("task_name")
+            if not key:
                 continue
-            latest_status_by_activity[activity_name] = status
+            snapshots[key] = row
 
-        return [
-            activity_name
-            for activity_name, status in latest_status_by_activity.items()
-            if status == "DONE"
-        ]
+        return snapshots
 
-    def _build_activity(self, activity_builder: Any, configured_name: Optional[str]) -> ScheduledActivity:
-        instance = activity_builder() if callable(activity_builder) else activity_builder
-        metadata = self._extract_metadata(instance)
-        activity_name = configured_name or metadata.get("name") or getattr(instance, "name", None)
-        activity_name = activity_name or instance.__class__.__name__
-        runner = self._resolve_runner(instance)
-        max_retries = self._safe_int(metadata.get("max_retries", 0))
+    def _find_snapshot_for_task(
+        self, task: SystemTask, snapshots: Dict[str, Dict[str, str]]
+    ) -> Dict[str, str] | None:
+        return snapshots.get(task.task_id) or snapshots.get(task.name)
 
-        return ScheduledActivity(
-            activity_id=gen_id(),
-            name=str(activity_name),
-            runner=runner,
-            original=instance,
-            metadata=metadata,
-            max_retries=max_retries,
-        )
+    def _coerce_task(self, task_builder: Any, configured_name: Optional[str]) -> SystemTask:
+        candidate = task_builder() if callable(task_builder) else task_builder
+        if not isinstance(candidate, SystemTask):
+            raise TypeError("La actividad debe devolver una instancia de SystemTask.")
 
-    def _extract_metadata(self, instance: Any) -> Dict[str, Any]:
-        raw_metadata = getattr(instance, "metadata", {})
-        if isinstance(raw_metadata, dict):
-            return dict(raw_metadata)
-        return {}
+        if configured_name and not candidate.name:
+            candidate.name = str(configured_name)
 
-    def _resolve_runner(self, instance: Any) -> Any:
-        public_runner = getattr(instance, "run", None)
-        if callable(public_runner):
-            return public_runner
+        return candidate
 
-        private_runner = getattr(instance, "_run", None)
-        if callable(private_runner):
-            return private_runner
+    def _should_enqueue_task(self, task: SystemTask) -> bool:
+        if not task.enabled:
+            return False
+        if task.status in {Status.CANCELLED, Status.SKIPPED, Status.FAILED}:
+            return False
+        if task.status == Status.DONE and not task.is_recurrent():
+            return False
+        return True
 
-        raise TypeError("La actividad no expone un método 'run()' o '_run()'")
+    def _log_task_event(self, task: SystemTask, *, event: str, detail: str = "") -> None:
+        self.schedule_doc.addEntry(task.to_log_row(event=event, detail=detail))
 
-    def _safe_int(self, value: Any, default: int = 0) -> int:
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return default
+    def addActivity(
+        self, task_or_factory: SystemTask | Any, task_name: Optional[str] = None
+    ) -> SystemTask:
+        task = self._coerce_task(task_or_factory, task_name)
+        if task.task_id in self._known_task_ids:
+            raise ValueError(f"Task ID duplicado: {task.task_id}")
 
-    def _log_activity_event(
-        self,
-        activity: ScheduledActivity,
-        *,
-        event: str,
-        status: str,
-        detail: str = "",
-    ) -> None:
-        timestamp = now_mx().isoformat()
-        self.schedule_doc.addEntry(
-            (
-                gen_id("log"),
-                timestamp,
-                activity.activity_id,
-                activity.name,
-                event,
-                status,
-                detail,
-            )
-        )
+        self.executeLoop.append(task)
+        self._known_task_ids.add(task.task_id)
+        self._log_task_event(task, event="registered", detail="Task added dynamically")
+        return task
 
-    def addActivity(self, activity_builder: Any, activity_name: Optional[str] = None) -> ScheduledActivity:
-        activity = self._build_activity(activity_builder, activity_name)
-        self.executeLoop.append(activity)
-        self._log_activity_event(
-            activity,
-            event="registered",
-            status=activity.status,
-            detail="Activity added dynamically",
-        )
-        return activity
-
-    def deleteActivity(self, activity_name: str) -> bool:
-        for index, activity in enumerate(self.executeLoop):
-            if activity.name != activity_name:
+    def deleteActivity(self, identifier: str) -> bool:
+        for index, task in enumerate(self.executeLoop):
+            if task.task_id != identifier and task.name != identifier:
                 continue
 
             removed = self.executeLoop.pop(index)
-            removed.status = "SKIPPED"
-            self._log_activity_event(
+            removed.enabled = False
+            removed.status = Status.SKIPPED
+            self._known_task_ids.discard(removed.task_id)
+            self._log_task_event(
                 removed,
                 event="deleted",
-                status=removed.status,
-                detail="Activity removed from scheduler execute loop",
+                detail="Task removed from scheduler execute loop",
             )
             return True
 
         return False
 
-    def getExecuteLoop(self) -> Tuple[ScheduledActivity, ...]:
+    def getExecuteLoop(self) -> Tuple[SystemTask, ...]:
         return tuple(self.executeLoop)
 
-    def _can_run(self, activity: ScheduledActivity) -> bool:
-        return activity.status == "PENDING"
-
-    def _run_activity(self, activity: ScheduledActivity) -> None:
-        activity.status = "RUNNING"
-        activity.run_count += 1
-        activity.last_run_at = now_mx()
-        self._log_activity_event(
-            activity,
-            event="started",
-            status=activity.status,
-            detail=f"Run #{activity.run_count}",
-        )
+    def _run_task(self, task: SystemTask) -> None:
+        task.mark_running(now_mx())
+        self._log_task_event(task, event="started", detail=f"Run #{task.run_count}")
 
         try:
-            result = activity.runner()
+            result = task.run()
         except Exception as exc:
-            activity.last_error = str(exc)
-            if activity.retry_count < activity.max_retries:
-                activity.retry_count += 1
-                activity.status = "PENDING"
-                self._log_activity_event(
-                    activity,
+            task.mark_failure(now_mx(), exc)
+            if task.status == Status.PENDING:
+                self._log_task_event(
+                    task,
                     event="retry_scheduled",
-                    status=activity.status,
-                    detail=(
-                        f"{activity.last_error} | retry "
-                        f"{activity.retry_count}/{activity.max_retries}"
-                    ),
+                    detail=f"{task.last_error} | retry {task.retry_count}/{task.max_retries}",
                 )
             else:
-                activity.status = "FAILED"
-                self._log_activity_event(
-                    activity,
-                    event="failed",
-                    status=activity.status,
-                    detail=activity.last_error,
-                )
-                self.logger.error(f"Actividad fallida: {activity.name} | {activity.last_error}")
+                self._log_task_event(task, event="failed", detail=task.last_error or "")
+                self.logger.error(f"{task.to_scheduler_log('failed')} | error={task.last_error}")
             return
 
-        detail = "Activity completed successfully"
-        if result is not None:
-            detail = str(result)
-
-        activity.last_error = None
-        activity.status = "DONE"
-        self._log_activity_event(
-            activity,
-            event="completed",
-            status=activity.status,
-            detail=detail,
-        )
+        task.mark_success(now_mx(), result)
+        detail = "Task completed successfully" if result is None else str(result)
+        self._log_task_event(task, event="completed", detail=detail)
 
     def run(self, stop_event=None, poll_interval: float = 1.0) -> None:
         while True:
@@ -312,11 +277,12 @@ class Scheduler:
                 self.logger.info("Scheduler detenido por stop_event")
                 break
 
-            for activity in self.executeLoop:
+            current_time = now_mx()
+            for task in self.executeLoop:
                 if stop_event is not None and stop_event.is_set():
                     break
-                if not self._can_run(activity):
+                if not task.can_run(current_time):
                     continue
-                self._run_activity(activity)
+                self._run_task(task)
 
             sleep(poll_interval)

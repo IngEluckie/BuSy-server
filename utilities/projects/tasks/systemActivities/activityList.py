@@ -1,13 +1,15 @@
-# activityList.py
+from __future__ import annotations
 
-# Import libraries
-from typing import Dict
+from typing import Callable
 
-# Import modules
-#from node_synching.node_sync import NSync
-from utilities.projects.tasks.systemActivities.node_synching.node_sync import init_NSync
+from utilities.projects.tasks.systemActivities.node_synching.node_sync import (
+    build_node_sync_task,
+)
+from utilities.projects.tasks.systemTask import SystemTask
 
-ActivityList: Dict = {
-    "systemActivities": [init_NSync,]
 
+ActivityFactory = Callable[[], SystemTask]
+
+ActivityList: dict[str, list[ActivityFactory]] = {
+    "systemActivities": [build_node_sync_task],
 }

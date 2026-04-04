@@ -1,20 +1,27 @@
-# node_sync
+from __future__ import annotations
 
-# Import libraries
-from typing import Dict
+from utilities.projects.tasks.systemTask import SystemSource, SystemTask
+from utilities.projects.tasks.task import Repeat, TaskType
+
 
 class NSync:
+    def run(self) -> str:
+        print("Iniciando actividad de sincronizacion")
+        return "Node sync placeholder finished"
 
-    def _run(self) -> None:
-        print("Iniciando actividad")
-        pass
 
-    def __init__(self) -> None:
-        print("Hola desde node_sync")
-
-        self.metadata: Dict = {}
-
-        pass
-
-def init_NSync() -> NSync:
-    return NSync()
+def build_node_sync_task() -> SystemTask:
+    worker = NSync()
+    task = SystemTask(
+        task_id="system.node_sync",
+        name="NSync",
+        description="Synchronize business nodes and shared state.",
+        handler_name="node_sync",
+        source=SystemSource.SYNC,
+        owner_component="node_sync",
+        type=TaskType.UNIQUE,
+        repeat=Repeat.NEVER,
+        max_retries=1,
+    )
+    task.bind_runner(worker.run)
+    return task

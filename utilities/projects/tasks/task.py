@@ -1,10 +1,13 @@
-# task.py
+from __future__ import annotations
 
-from pydantic import BaseModel
-from terminalTools import FechaHora
-from tags.tag import Tag
-from typing import Tuple
+from datetime import datetime
 from enum import Enum
+from typing import Tuple
+
+from pydantic import BaseModel, ConfigDict
+
+from utilities.projects.tasks.tags.tag import Tag
+
 
 class Priority(str, Enum):
     CRITICAL = "CRITICAL"
@@ -12,16 +15,22 @@ class Priority(str, Enum):
     MID = "MID"
     LOW = "LOW"
 
+
 class Status(str, Enum):
     PENDING = "PENDING"
+    RUNNING = "RUNNING"
     DONE = "DONE"
+    FAILED = "FAILED"
     CANCELLED = "CANCELLED"
     POSTPOSED = "POSTPOSED"
+    SKIPPED = "SKIPPED"
     LOST = "LOST"
+
 
 class TaskType(str, Enum):
     UNIQUE = "UNIQUE"
     CRON = "CRON"
+
 
 class Repeat(str, Enum):
     NEVER = "NEVER"
@@ -32,17 +41,19 @@ class Repeat(str, Enum):
     MONTHLY = "MONTHLY"
     YEARLY = "YEARLY"
 
-#now: fechaHora = FechaHora().registro
+
 class Task(BaseModel):
     """
-    Minimum unit for Schedule management
+    Minimum unit for schedule management.
     """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
+
     name: str
-    date: FechaHora
-    tags: Tuple[Tag, ...]
-    description: str
-    priority: Priority
-    status: Status
-    type: TaskType
-    #is_internal: bool # Is internal activity of the system?
-    repeat: Repeat
+    description: str = ""
+    date: datetime | None = None
+    tags: Tuple[Tag, ...] = ()
+    priority: Priority = Priority.MID
+    status: Status = Status.PENDING
+    type: TaskType = TaskType.UNIQUE
+    repeat: Repeat = Repeat.NEVER
