@@ -1,55 +1,68 @@
 # singleton.py
 
-# Importar librerías
 import sqlite3
+from pathlib import Path
 from sqlite3 import Error
-from typing import Any, List, Tuple, Optional
-import os
+from typing import Any, List, Optional, Tuple
+
+from utilities.handleDocument.document import BusyPaths
 
 
-db_name: str = "systemDB.db" # Default database for BuSy
+db_name: str = "main.sqlite3"
+
+
 class Database:
+    _instances: dict[str, "Database"] = {}
 
-    _instance = None
-    # Obtenemos la ruta del directorio don de se encuentra este script
-    _file_name: str = db_name
-    _base_dir: str = os.path.dirname(__file__)
-    # Construir la ruta absoluta al arvhido de base de datos
-    _db_path: str = os.path.join(_base_dir, _file_name)
+    def __new__(
+        cls,
+        db_path: str | Path | None = None,
+        root_dir: str | Path | None = None,
+    ) -> "Database":
+        paths = BusyPaths(root_dir=root_dir)
+        resolved_path = cls._resolve_db_path(paths, db_path)
+        instance_key = str(resolved_path)
 
-    def __new__(cls):
-        if cls._instance is None:
-            try:
-                cls._instance = super(Database, cls).__new__(cls)
-                cls._instance.connection = sqlite3.connect(cls._db_path, check_same_thread=False)
-                # Configuramos el row_factory para que las filas
-                # se puedan convertir en directorios.
-                cls._instance.connection.row_factory = sqlite3.Row
-                cls._instance.cursor = cls._instance.connection.cursor()
-                print(f"Conexión a la base de datos establecida en: {cls._db_path}")
-            except Error as e:
-                print(f"Error al conectar con la base de datos {cls._file_name}, error: \n {e}")
-                cls._instance = None
-        return cls._instance
-    
+        if instance_key in cls._instances:
+            return cls._instances[instance_key]
+
+        try:
+            instance = super(Database, cls).__new__(cls)
+            instance._db_path = resolved_path
+            instance.connection = sqlite3.connect(resolved_path, check_same_thread=False)
+            instance.connection.row_factory = sqlite3.Row
+            instance.cursor = instance.connection.cursor()
+            cls._instances[instance_key] = instance
+            print(f"Conexión a la base de datos establecida en: {resolved_path}")
+            return instance
+        except Error as e:
+            print(f"Error al conectar con la base de datos {resolved_path.name}, error:\n {e}")
+            raise
+
+    @staticmethod
+    def _resolve_db_path(paths: BusyPaths, db_path: str | Path | None) -> Path:
+        if db_path is not None:
+            custom_path = Path(db_path).expanduser()
+            if not custom_path.is_absolute():
+                custom_path = paths.project_root / custom_path
+            custom_path.parent.mkdir(parents=True, exist_ok=True)
+            return custom_path.resolve()
+
+        return paths.ensure_runtime_database(filename=db_name).resolve()
+
     def execute_query(self, query: str, params: Tuple = ()) -> None:
-        # Ejecuta una consulta SQL que no retorna resultados:
-        # INSERT, UPDATE, DELETE, etc...
-        try: 
+        try:
             self.cursor.execute(query, params)
             self.connection.commit()
-            print(f"Consulta ejecutada exitosamente.")
+            print("Consulta ejecutada exitosamente.")
         except Error as e:
             print(f"Error al ejecutar la consulta: {e}")
             self.connection.rollback()
 
     def fetch_query(self, query: str, params: Tuple = ()) -> Optional[List[Any]]:
-        # Ejecuta una consulta SQL que retorna resultados (SELECT)
-        # y retorna una lista con los resultados
         try:
             self.cursor.execute(query, params)
             resultados = self.cursor.fetchall()
-            # Convertimos cada fila en un diccionario
             result_list = [dict(row) for row in resultados]
             print("Consulta de selección ejecutada exitosamente.")
             return result_list
@@ -57,12 +70,7 @@ class Database:
             print(f"Error al ejecutar la consulta de selección: {e}")
             return None
 
-    # singleton.py  ➜ agrega este método dentro de la clase Database
     def executemany(self, query: str, seq_params: List[Tuple]) -> None:
-        """
-        Ejecuta la misma consulta SQL con múltiples conjuntos de parámetros
-        (útil para inserciones masivas).
-        """
         try:
             self.cursor.executemany(query, seq_params)
             self.connection.commit()
@@ -71,12 +79,13 @@ class Database:
             print(f"Error en executemany: {e}")
             self.connection.rollback()
 
-
-    def close_connection(self):
-        # Cerramos la conexión a la base de datos.
+    def close_connection(self) -> None:
         connection = getattr(self, "connection", None)
+        instance_key = str(getattr(self, "_db_path", ""))
+
         if connection is None:
-            Database._instance = None
+            if instance_key:
+                Database._instances.pop(instance_key, None)
             return
 
         try:
@@ -86,6 +95,7 @@ class Database:
             connection.close()
             print("Conexión a la base de datos cerrada")
         finally:
-            Database._instance = None
+            if instance_key:
+                Database._instances.pop(instance_key, None)
             self.connection = None
             self.cursor = None

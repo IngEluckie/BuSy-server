@@ -16,6 +16,8 @@ from datetime import datetime, date, timedelta
 import time
 import csv
 
+from utilities.handleDocument.document import BusyPaths
+
 @dataclass
 class FechaHora:
     # Date helper
@@ -27,11 +29,23 @@ class FechaHora:
 
 class CsvManager:
 
-    def __init__(self, filename: str, base_dir: str = "."):
-        self.filename = f"{filename}.csv"
-        # ¡IMPORTANTE!
-        # No olvidar modificar la ruta en caso de migración
-        self.filepath = Path(base_dir) / "static" / "private" / "systemLogs" / self.filename
+    def __init__(
+        self,
+        filename: str,
+        base_dir: str | Path | None = None,
+        file_path: str | Path | None = None,
+    ):
+        self.paths = BusyPaths(root_dir=base_dir)
+        if file_path is not None:
+            self.filepath = self._resolve_custom_path(file_path)
+            self.filename = self.filepath.name
+            self.filepath.parent.mkdir(parents=True, exist_ok=True)
+            if not self.filepath.exists():
+                self.filepath.touch()
+            return
+
+        self.filename = self._normalize_filename(filename)
+        self.filepath = self.paths.ensure_runtime_log(self.filename)
 
         if not self.filepath.exists():
             print("Archivo no encontrado")
@@ -39,6 +53,20 @@ class CsvManager:
             print("Archivo creado")
         else:
             print("Arvhivo encontrado e inicializado")
+
+    def _normalize_filename(self, filename: str) -> str:
+        normalized = filename.strip()
+        if not normalized:
+            raise ValueError("CsvManager filename cannot be empty")
+        if not normalized.lower().endswith(".csv"):
+            normalized = f"{normalized}.csv"
+        return normalized
+
+    def _resolve_custom_path(self, file_path: str | Path) -> Path:
+        custom_path = Path(file_path).expanduser()
+        if not custom_path.is_absolute():
+            custom_path = self.paths.project_root / custom_path
+        return custom_path.resolve()
 
     def addTopRow(self, row: Tuple[Any, ...]) -> None:
         """Añade una fila al inicio del archivo CSV."""
