@@ -40,6 +40,67 @@ Reconstruir la imagen desde cero:
 docker compose build --no-cache
 ```
 
+## Publicacion en Docker Hub
+
+La imagen de este proyecto puede publicarse en Docker Hub a partir del [`Dockerfile`](/Users/josueernestogalindomorales/Desktop/systems/dev/BuSy/Dockerfile:1).
+
+Antes de la primera publicacion:
+
+1. Crear un repositorio en Docker Hub, por ejemplo `eluckie/busy-server`.
+2. Iniciar sesion desde terminal:
+
+```bash
+docker login
+```
+
+Construir la imagen y publicarla por primera vez:
+
+```bash
+docker build -t eluckie/busy-server:latest .
+docker push eluckie/busy-server:latest
+```
+
+Si se quiere mantener una version fija y la etiqueta `latest` al mismo tiempo:
+
+```bash
+docker build -t eluckie/busy-server:1.0.0 -t eluckie/busy-server:latest .
+docker push eluckie/busy-server:1.0.0
+docker push eluckie/busy-server:latest
+```
+
+## Actualizacion de la imagen en Docker Hub
+
+Cada vez que cambie el codigo y se quiera actualizar la imagen publicada, es necesario reconstruirla y volver a subir la etiqueta correspondiente.
+
+Actualizar solo `latest`:
+
+```bash
+docker build -t eluckie/busy-server:latest .
+docker push eluckie/busy-server:latest
+```
+
+Actualizar una version concreta y tambien `latest`:
+
+```bash
+docker build -t eluckie/busy-server:1.0.1 -t eluckie/busy-server:latest .
+docker push eluckie/busy-server:1.0.1
+docker push eluckie/busy-server:latest
+```
+
+Si ya existe una sesion activa en Docker Hub, no es necesario repetir `docker login` en cada actualizacion.
+
+Para usar la imagen publicada desde Docker Compose, el servicio puede referenciarla con `image:`:
+
+```yaml
+services:
+  app:
+    image: eluckie/busy-server:latest
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+```
+
 ## Persistencia y hot-reload
 
 La aplicacion arranca con `uvicorn --reload`, por lo que los cambios en el codigo se reflejan durante desarrollo local.
