@@ -46,6 +46,7 @@ La aplicacion arranca con `uvicorn --reload`, por lo que los cambios en el codig
 
 Los siguientes directorios se montan desde el host al contenedor:
 
+- `./.busy` hacia `/app/.busy`
 - `./main.py` hacia `/app/main.py`
 - `./routers` hacia `/app/routers`
 - `./utilities` hacia `/app/utilities`
@@ -54,8 +55,9 @@ Los siguientes directorios se montan desde el host al contenedor:
 
 Esto implica que:
 
-- la base SQLite sigue viviendo en `databases/systemDB.db`
-- los logs CSV siguen viviendo en `static/private/systemLogs`
+- la base SQLite activa vive en `.busy/db/main.sqlite3`
+- los logs CSV activos viven en `.busy/logs`
+- si la base no existe, el sistema puede crear `.busy/db/main.sqlite3` desde su schema versionado
 - los archivos estaticos siguen siendo servidos desde `static/public`
 
 Al recrear el contenedor, esos datos se conservan porque permanecen en tu directorio de trabajo local.

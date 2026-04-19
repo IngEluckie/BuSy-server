@@ -5,7 +5,6 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
@@ -13,6 +12,7 @@ from typing import Any
 
 # Import database singleton
 from databases.singleton import Database
+from utilities.security.passwords import crypt
 
 # Iniciar router
 router_authentication = APIRouter(prefix="/auth")
@@ -44,9 +44,6 @@ oauth2 = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 # Algoritmo
 ALGORITHM = os.getenv("ALGORITHM")
-
-# Contexto de cifrado
-crypt = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Duración del token (en minutos)
 ACCESS_TOKEN_DURATION = int(os.getenv("ACCESS_TOKEN_DURATION", 30))

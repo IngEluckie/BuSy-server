@@ -68,12 +68,20 @@ class BusyPaths:
         return self.busy_root / "config" / "app.env.example"
 
     @property
-    def legacy_database_path(self) -> Path:
-        return self.project_root / "databases" / "systemDB.db"
+    def legacy_root(self) -> Path:
+        return self.project_root / "legacy"
+
+    @property
+    def legacy_database_dir(self) -> Path:
+        return self.legacy_root / "db"
 
     @property
     def legacy_logs_dir(self) -> Path:
-        return self.project_root / "static" / "private" / "systemLogs"
+        return self.legacy_root / "logs"
+
+    @property
+    def legacy_database_path(self) -> Path:
+        return self.legacy_database_dir / "systemDB.db"
 
     def resolve_storage_path(self, category: str, filename: str | None = None) -> Path:
         normalized_category = category.strip().lower()
@@ -103,8 +111,6 @@ class BusyPaths:
     def ensure_runtime_database(self, filename: str = "main.sqlite3") -> Path:
         self.bootstrap()
         runtime_path = self.resolve_database_path(filename)
-        legacy_path = self.legacy_database_path
-        self._copy_if_missing(runtime_path, legacy_path)
         runtime_path.parent.mkdir(parents=True, exist_ok=True)
         return runtime_path
 

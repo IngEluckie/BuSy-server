@@ -23,7 +23,7 @@
 - routers/authentication.py
 - databases/singleton.py
 - databases/schema.ipynb
-- databases/systemDB.db
+- .busy/db/main.sqlite3
 
 ### System configuration
 - Server node (But only one server is active)

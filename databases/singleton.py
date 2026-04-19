@@ -5,6 +5,7 @@ from pathlib import Path
 from sqlite3 import Error
 from typing import Any, List, Optional, Tuple
 
+from databases.bootstrap import initialize_database, needs_database_initialization
 from utilities.handleDocument.document import BusyPaths
 
 
@@ -31,6 +32,8 @@ class Database:
             instance._db_path = resolved_path
             instance.connection = sqlite3.connect(resolved_path, check_same_thread=False)
             instance.connection.row_factory = sqlite3.Row
+            if needs_database_initialization(instance.connection):
+                initialize_database(instance.connection, resolved_path)
             instance.cursor = instance.connection.cursor()
             cls._instances[instance_key] = instance
             print(f"Conexión a la base de datos establecida en: {resolved_path}")

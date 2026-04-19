@@ -13,6 +13,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      - ./.busy:/app/.busy
       - ./main.py:/app/main.py
       - ./routers:/app/routers
       - ./utilities:/app/utilities

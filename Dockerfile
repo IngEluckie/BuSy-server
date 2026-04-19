@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN mkdir -p /app/databases /app/static/private/systemLogs
+RUN mkdir -p /app/.busy /app/legacy
 
 COPY requirements.txt .
 
