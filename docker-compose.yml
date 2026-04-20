@@ -10,10 +10,12 @@ services:
     environment:
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
+      BUSY_ARCHIVE_PATH: "/workspace/.busy.zip"
+      BUSY_RUNTIME_DIR: "/tmp/busy-runtime"
     ports:
       - "8000:8000"
     volumes:
-      - ./.busy:/app/.busy
+      - ./:/workspace
       - ./main.py:/app/main.py
       - ./routers:/app/routers
       - ./utilities:/app/utilities

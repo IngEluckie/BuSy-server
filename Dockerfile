@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN mkdir -p /app/.busy /app/legacy
+RUN mkdir -p /app/legacy /tmp/busy-runtime /workspace
 
 COPY requirements.txt .
 

@@ -24,6 +24,7 @@ import os
 # Import modules
 from databases.singleton import Database
 from routers import authentication, userconf
+from utilities.handleDocument.document import BusyPaths
 from utilities.scheduler.scheduler import Scheduler
 from utilities.terminalTools import CsvManager, Logger
 
@@ -89,6 +90,10 @@ def shutdown_event():
     db = Database()
     db.close_connection()
     logger.info("Servicio terminado... ¡Adios!")
+
+    busy_paths = BusyPaths()
+    busy_paths.flush_archive()
+    busy_paths.cleanup()
     
 """
 -----------------------------

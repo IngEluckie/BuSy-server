@@ -42,10 +42,12 @@ class CsvManager:
             self.filepath.parent.mkdir(parents=True, exist_ok=True)
             if not self.filepath.exists():
                 self.filepath.touch()
+            self._managed_by_busy = self.paths.is_managed_path(self.filepath)
             return
 
         self.filename = self._normalize_filename(filename)
         self.filepath = self.paths.ensure_runtime_log(self.filename)
+        self._managed_by_busy = self.paths.is_managed_path(self.filepath)
 
         if not self.filepath.exists():
             print("Archivo no encontrado")
@@ -78,6 +80,7 @@ class CsvManager:
             existing_content = self.filepath.read_text()
         # Escribir la nueva fila y luego el contenido antiguo
         self.filepath.write_text(row_line + existing_content)
+        self._flush_archive()
         print(f"addTopRow() added {row} to {self.filename}")
 
     def addEntry(self, row: Tuple[Any, ...]) -> None:
@@ -107,6 +110,7 @@ class CsvManager:
                     f.write(b"\n")
             f.write(row_line.encode())
 
+        self._flush_archive()
         print(f"addEntry() added {row} to {self.filename}")
 
     def changePath(self, newBasePath: Path):
@@ -219,6 +223,10 @@ class CsvManager:
             f"{ORANGE}CsvManager error report: {error}.\n"
             f" --Log no guardado en registro-- \n{RESET}"
         )
+
+    def _flush_archive(self) -> None:
+        if getattr(self, "_managed_by_busy", False):
+            self.paths.flush_archive()
 
 # ---- Colores ANSI
 _RED: Final[str] = "\033[91m"

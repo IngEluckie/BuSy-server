@@ -105,9 +105,9 @@ services:
 
 La aplicacion arranca con `uvicorn --reload`, por lo que los cambios en el codigo se reflejan durante desarrollo local.
 
-Los siguientes directorios se montan desde el host al contenedor:
+Los siguientes mounts se usan desde el host al contenedor:
 
-- `./.busy` hacia `/app/.busy`
+- `./` hacia `/workspace` para persistir `.busy.zip`
 - `./main.py` hacia `/app/main.py`
 - `./routers` hacia `/app/routers`
 - `./utilities` hacia `/app/utilities`
@@ -116,12 +116,14 @@ Los siguientes directorios se montan desde el host al contenedor:
 
 Esto implica que:
 
-- la base SQLite activa vive en `.busy/db/main.sqlite3`
-- los logs CSV activos viven en `.busy/logs`
-- si la base no existe, el sistema puede crear `.busy/db/main.sqlite3` desde su schema versionado
+- el artefacto persistente principal es `.busy.zip`
+- el runtime activo se descomprime temporalmente dentro del contenedor en `BUSY_RUNTIME_DIR`
+- la base SQLite activa vive temporalmente en `BUSY_RUNTIME_DIR/db/main.sqlite3`
+- los logs CSV activos viven temporalmente en `BUSY_RUNTIME_DIR/logs`
+- si el ZIP no existe, el sistema crea `.busy.zip` con la estructura inicial y luego genera la base dentro del runtime
 - los archivos estaticos siguen siendo servidos desde `static/public`
 
-Al recrear el contenedor, esos datos se conservan porque permanecen en tu directorio de trabajo local.
+Al recrear el contenedor, los datos se conservan porque `.busy.zip` permanece en tu directorio de trabajo local.
 
 ## Alcance de esta fase
 

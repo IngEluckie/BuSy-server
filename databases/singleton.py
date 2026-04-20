@@ -29,11 +29,14 @@ class Database:
 
         try:
             instance = super(Database, cls).__new__(cls)
+            instance.paths = paths
             instance._db_path = resolved_path
+            instance._managed_by_busy = paths.is_managed_path(resolved_path)
             instance.connection = sqlite3.connect(resolved_path, check_same_thread=False)
             instance.connection.row_factory = sqlite3.Row
             if needs_database_initialization(instance.connection):
                 initialize_database(instance.connection, resolved_path)
+                instance._flush_archive()
             instance.cursor = instance.connection.cursor()
             cls._instances[instance_key] = instance
             print(f"Conexión a la base de datos establecida en: {resolved_path}")
@@ -57,6 +60,7 @@ class Database:
         try:
             self.cursor.execute(query, params)
             self.connection.commit()
+            self._flush_archive()
             print("Consulta ejecutada exitosamente.")
         except Error as e:
             print(f"Error al ejecutar la consulta: {e}")
@@ -77,10 +81,15 @@ class Database:
         try:
             self.cursor.executemany(query, seq_params)
             self.connection.commit()
+            self._flush_archive()
             print("Consulta executemany ejecutada exitosamente.")
         except Error as e:
             print(f"Error en executemany: {e}")
             self.connection.rollback()
+
+    def _flush_archive(self) -> None:
+        if getattr(self, "_managed_by_busy", False):
+            self.paths.flush_archive()
 
     def close_connection(self) -> None:
         connection = getattr(self, "connection", None)
