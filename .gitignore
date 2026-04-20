@@ -6,4 +6,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .venv/
+.busy
 .busy/
+.busy.lock
+.busy.runtime.json

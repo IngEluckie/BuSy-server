@@ -39,11 +39,12 @@ class BusyArchivePersistenceTests(unittest.TestCase):
 
         self.temp_dir.cleanup()
 
-    def test_bootstrap_creates_busy_zip_with_default_structure(self) -> None:
+    def test_bootstrap_creates_busy_archive_with_default_structure(self) -> None:
         paths = bootstrap_busy_workspace(root_dir=self.root)
 
         self.assertTrue(paths.archive_path.exists())
-        self.assertFalse((self.root / ".busy").exists())
+        self.assertEqual(paths.archive_path.name, ".busy")
+        self.assertTrue(paths.archive_path.is_file())
 
         with zipfile.ZipFile(paths.archive_path, "r") as archive:
             names = set(archive.namelist())
@@ -85,18 +86,14 @@ class BusyArchivePersistenceTests(unittest.TestCase):
         self.assertIsNotNone(rows)
         self.assertTrue(any(row["value"] == "ok" for row in rows or []))
 
-    def test_legacy_busy_directory_is_ignored_without_archive(self) -> None:
-        legacy_document = self.root / ".busy" / "storage" / "documents" / "legacy.txt"
-        legacy_document.parent.mkdir(parents=True, exist_ok=True)
-        legacy_document.write_text("legacy-content", encoding="utf-8")
+    def test_custom_archive_path_without_zip_extension_is_respected(self) -> None:
+        os.environ["BUSY_ARCHIVE_PATH"] = str(self.root / ".busy.custom")
 
         paths = bootstrap_busy_workspace(root_dir=self.root)
 
-        with zipfile.ZipFile(paths.archive_path, "r") as archive:
-            names = set(archive.namelist())
-
-        self.assertNotIn("storage/documents/legacy.txt", names)
-        self.assertFalse(paths.resolve_storage_path("documents", "legacy.txt").exists())
+        self.assertEqual(paths.archive_path.name, ".busy.custom")
+        self.assertTrue(paths.archive_path.exists())
+        self.assertFalse((self.root / ".busy.custom.zip").exists())
 
 
 if __name__ == "__main__":

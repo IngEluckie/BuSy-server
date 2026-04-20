@@ -23,7 +23,7 @@
 - routers/authentication.py
 - databases/singleton.py
 - databases/schema.ipynb
-- .busy.zip
+- .busy
 
 ### System configuration
 - Server node (But only one server is active)

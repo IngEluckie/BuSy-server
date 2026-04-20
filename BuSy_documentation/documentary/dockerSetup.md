@@ -9,7 +9,7 @@ La configuracion actual:
 - usa FastAPI con `uvicorn`
 - mantiene SQLite como base de datos local
 - conserva logs CSV en archivos del proyecto
-- usa `.busy.zip` como persistencia principal y un runtime temporal fuera del repo
+- usa `.busy` como persistencia principal y un runtime temporal fuera del repo
 - deja scheduler y API en el mismo contenedor
 
 ## Archivos involucrados
@@ -82,7 +82,7 @@ docker compose logs -f
 - que el archivo `.env` tenga las variables necesarias
 - que `/ison` responda correctamente
 - que el login siga funcionando
-- que `.busy.zip` exista o se regenere
+- que `.busy` exista o se regenere
 - que los archivos de log sigan actualizandose dentro del runtime temporal
 
 ## Persistencia y desarrollo local
@@ -95,9 +95,9 @@ La configuracion de Docker monta directorios del proyecto desde el host al conte
 
 Los datos persistidos viven en el proyecto local dentro de:
 
-- `.busy.zip`
+- `.busy`
 
-Durante la ejecucion, BuSy descomprime el contenedor en `BUSY_RUNTIME_DIR`, opera sobre archivos normales y vuelve a compactar el resultado en `.busy.zip`.
+Durante la ejecucion, BuSy descomprime el contenedor en `BUSY_RUNTIME_DIR`, opera sobre archivos normales y vuelve a compactar el resultado en `.busy`.
 
 ## Variables de entorno
 

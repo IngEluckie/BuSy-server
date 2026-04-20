@@ -10,7 +10,10 @@ __pycache__/
 .ruff_cache/
 .vscode/
 .idea/
+.busy
 .busy/
+.busy.lock
+.busy.runtime.json
 legacy/
 BuSy_documentation/
 prompts.md

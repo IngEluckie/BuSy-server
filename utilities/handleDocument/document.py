@@ -17,7 +17,7 @@ import fcntl
 
 class BusyPaths:
     """
-    Centraliza las rutas del runtime local de BuSy usando `.busy.zip`
+    Centraliza las rutas del runtime local de BuSy usando `.busy`
     como artefacto persistente y un workspace temporal como runtime vivo.
     """
 
@@ -222,12 +222,10 @@ class BusyPaths:
             self._runtime_state_path.unlink()
 
     def _resolve_archive_path(self) -> Path:
-        configured = os.getenv("BUSY_ARCHIVE_PATH", ".busy.zip")
+        configured = os.getenv("BUSY_ARCHIVE_PATH", ".busy")
         archive_path = Path(configured).expanduser()
         if not archive_path.is_absolute():
             archive_path = self.project_root / archive_path
-        if archive_path.suffix.lower() != ".zip":
-            archive_path = archive_path.with_suffix(f"{archive_path.suffix}.zip")
         archive_path.parent.mkdir(parents=True, exist_ok=True)
         return archive_path.resolve()
 
@@ -559,7 +557,7 @@ class BusyPaths:
 
 class Document:
     """
-    Manejador simple para archivos dentro del runtime persistido en `.busy.zip`.
+    Manejador simple para archivos dentro del runtime persistido en `.busy`.
     """
 
     def __init__(
