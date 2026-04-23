@@ -1,0 +1,5 @@
+# wpSync.py
+
+"""
+Gestiona configuraciones
+"""

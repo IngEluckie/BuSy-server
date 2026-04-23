@@ -18,79 +18,10 @@
     </style>
 </head>
 <body>
-    <div class="hint">Cargando…</div>
+    <div class="hint">Redirigiendo…</div>
 
     <script>
-      const baseUrl = window.location.origin;
-      const LOGIN_PATH = "/login/";
-      const DASHBOARD_PATH = "/dashboard/";
-
-      function redirect(path) {
-        window.location.replace(new URL(path, baseUrl).toString());
-      }
-
-      function base64UrlDecode(input) {
-        const base64 = input.replace(/-/g, "+").replace(/_/g, "/");
-        const padded = base64 + "===".slice((base64.length + 3) % 4);
-        return decodeURIComponent(
-          atob(padded)
-            .split("")
-            .map((c) => "%" + c.charCodeAt(0).toString(16).padStart(2, "0"))
-            .join("")
-        );
-      }
-
-      function getJwtPayload(token) {
-        const parts = String(token || "").split(".");
-        if (parts.length !== 3) return null;
-        try {
-          return JSON.parse(base64UrlDecode(parts[1]));
-        } catch {
-          return null;
-        }
-      }
-
-      async function main() {
-        const token = localStorage.getItem("busy_token");
-        const tokenType = localStorage.getItem("busy_token_type") || "bearer";
-        if (!token) return redirect(LOGIN_PATH);
-
-        const payload = getJwtPayload(token);
-        const exp = payload?.exp;
-        if (!exp || typeof exp !== "number") return redirect(LOGIN_PATH);
-
-        const nowMs = Date.now();
-        const expMs = exp * 1000;
-        const skewMs = 30_000;
-        if (expMs <= nowMs + skewMs) return redirect(LOGIN_PATH);
-
-        try {
-          const res = await fetch(`${baseUrl}/auth/me`, {
-            method: "GET",
-            headers: { Authorization: `${tokenType} ${token}` },
-          });
-
-          if (!res.ok) {
-            localStorage.removeItem("busy_token");
-            localStorage.removeItem("busy_token_type");
-            localStorage.removeItem("busy_user");
-            localStorage.removeItem("busy_user_fetched_at");
-            return redirect(LOGIN_PATH);
-          }
-
-          const me = await res.json().catch(() => null);
-          if (me) {
-            localStorage.setItem("busy_user", JSON.stringify(me));
-            localStorage.setItem("busy_user_fetched_at", String(Date.now()));
-          }
-
-          return redirect(DASHBOARD_PATH);
-        } catch {
-          return redirect(LOGIN_PATH);
-        }
-      }
-
-      main();
+      window.location.replace("http://localhost:3000");
     </script>
 </body>
 </html>
