@@ -15,6 +15,10 @@ from typing import Any, Iterator
 import fcntl
 
 
+CURRENT_BUSY_FORMAT_VERSION = 1
+CURRENT_DATABASE_SCHEMA_VERSION = 1
+
+
 class BusyPaths:
     """
     Centraliza las rutas del runtime local de BuSy usando `.busy`
@@ -33,6 +37,8 @@ class BusyPaths:
 
     SQLITE_SUFFIXES: tuple[str, ...] = (".sqlite3", ".sqlite", ".db")
     SQLITE_SIDECAR_SUFFIXES: tuple[str, ...] = ("-wal", "-shm", "-journal")
+    CURRENT_BUSY_FORMAT_VERSION = CURRENT_BUSY_FORMAT_VERSION
+    CURRENT_DATABASE_SCHEMA_VERSION = CURRENT_DATABASE_SCHEMA_VERSION
 
     def __init__(self, root_dir: str | Path | None = None) -> None:
         self.project_root = Path(root_dir or Path.cwd()).resolve()
@@ -155,6 +161,32 @@ class BusyPaths:
             self._write_archive_locked()
         return self.archive_path
 
+    def create_archive_backup(self) -> Path:
+        with self._archive_lock():
+            return self._create_archive_backup_locked()
+
+    def restore_archive_backup(self, backup_path: str | Path) -> None:
+        with self._archive_lock():
+            self._restore_archive_backup_locked(Path(backup_path))
+
+    def update_database_schema_version(
+        self,
+        version: int = CURRENT_DATABASE_SCHEMA_VERSION,
+    ) -> Path:
+        self.bootstrap()
+        with self._archive_lock():
+            manifest = self._read_manifest_locked()
+            manifest["database_schema_version"] = version
+            self._write_manifest_locked(manifest)
+            self._refresh_manifest_locked()
+            self._write_archive_locked()
+        return self.archive_path
+
+    def upgrade_if_needed(self) -> bool:
+        self.bootstrap()
+        with self._archive_lock():
+            return self._upgrade_if_needed_locked()
+
     def cleanup(self) -> None:
         with self._archive_lock():
             self._cleanup_locked()
@@ -177,6 +209,7 @@ class BusyPaths:
                 self._ensure_runtime_defaults_locked()
                 self._refresh_manifest_locked()
                 self._write_archive_locked()
+            self._upgrade_if_needed_locked()
         else:
             self._runtime_root.mkdir(parents=True, exist_ok=True)
             if not self._runtime_manifest_path().exists():
@@ -189,6 +222,7 @@ class BusyPaths:
                     self._write_archive_locked()
             else:
                 self._ensure_runtime_defaults_locked()
+            self._upgrade_if_needed_locked()
 
         self._write_runtime_state_locked(
             {
@@ -393,6 +427,143 @@ class BusyPaths:
         )
         env_example_path.write_text(content, encoding="utf-8")
 
+    def _upgrade_if_needed_locked(self) -> bool:
+        manifest = self._read_manifest_locked()
+        current_version = self._manifest_int(
+            manifest,
+            "busy_format_version",
+            default=0,
+        )
+
+        if current_version > self.CURRENT_BUSY_FORMAT_VERSION:
+            raise RuntimeError(
+                "El archivo de persistencia requiere una version mas nueva de BuSy."
+            )
+
+        if current_version == self.CURRENT_BUSY_FORMAT_VERSION:
+            return False
+
+        backup_path = self._create_archive_backup_locked() if self.archive_path.exists() else None
+
+        try:
+            while current_version < self.CURRENT_BUSY_FORMAT_VERSION:
+                if current_version == 0:
+                    self._migrate_busy_format_0_to_1_locked()
+                    current_version = 1
+                    continue
+
+                raise RuntimeError(
+                    f"No existe migracion para .busy version {current_version}."
+                )
+
+            self._refresh_manifest_locked()
+            self._write_archive_locked()
+            return True
+        except Exception as exc:
+            if backup_path is not None:
+                self._restore_archive_backup_locked(backup_path)
+            raise RuntimeError(
+                f"No se pudo migrar '{self.archive_path.name}'. Se restauro el backup."
+            ) from exc
+
+    def _migrate_busy_format_0_to_1_locked(self) -> None:
+        self._ensure_runtime_defaults_locked()
+        self._merge_settings_locked()
+
+        manifest = self._read_manifest_locked()
+        manifest["busy_format_version"] = self.CURRENT_BUSY_FORMAT_VERSION
+        manifest.setdefault(
+            "database_schema_version",
+            self.CURRENT_DATABASE_SCHEMA_VERSION,
+        )
+        self._write_manifest_locked(manifest)
+
+    def _merge_settings_locked(self) -> None:
+        settings_path = self._runtime_settings_path()
+        default_settings = self._default_settings()
+
+        try:
+            current_settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            if not isinstance(current_settings, dict):
+                current_settings = {}
+        except (FileNotFoundError, json.JSONDecodeError):
+            current_settings = {}
+
+        merged = self._deep_merge(default_settings, current_settings)
+        merged.setdefault("database", {})
+        merged.setdefault("files", {})
+        merged.setdefault("logs", {})
+        if not isinstance(merged["database"], dict):
+            merged["database"] = {}
+        if not isinstance(merged["files"], dict):
+            merged["files"] = {}
+        if not isinstance(merged["logs"], dict):
+            merged["logs"] = {}
+
+        merged["database"]["path"] = default_settings["database"]["path"]
+        merged["files"]["root"] = default_settings["files"]["root"]
+        merged["logs"]["root"] = default_settings["logs"]["root"]
+        merged["files"]["categories"] = self._merge_unique_list(
+            current_settings.get("files", {}).get("categories", [])
+            if isinstance(current_settings.get("files"), dict)
+            else [],
+            default_settings["files"]["categories"],
+        )
+
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(
+            json.dumps(merged, ensure_ascii=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    def _deep_merge(self, defaults: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+        merged: dict[str, Any] = dict(defaults)
+        for key, value in current.items():
+            default_value = merged.get(key)
+            if isinstance(default_value, dict) and isinstance(value, dict):
+                merged[key] = self._deep_merge(default_value, value)
+            else:
+                merged[key] = value
+        return merged
+
+    def _merge_unique_list(self, current: Any, defaults: list[Any]) -> list[Any]:
+        merged: list[Any] = []
+        for value in list(current or []) + list(defaults):
+            if value not in merged:
+                merged.append(value)
+        return merged
+
+    def _create_archive_backup_locked(self) -> Path:
+        if not self.archive_path.exists():
+            raise FileNotFoundError(self.archive_path)
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        backup_path = self.archive_path.with_name(
+            f"{self.archive_path.name}.backup-{timestamp}"
+        )
+        counter = 1
+        while backup_path.exists():
+            backup_path = self.archive_path.with_name(
+                f"{self.archive_path.name}.backup-{timestamp}-{counter:02d}"
+            )
+            counter += 1
+
+        shutil.copy2(self.archive_path, backup_path)
+        return backup_path
+
+    def _restore_archive_backup_locked(self, backup_path: Path) -> None:
+        if not backup_path.exists():
+            raise FileNotFoundError(backup_path)
+
+        self.archive_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(backup_path, self.archive_path)
+
+        if self._runtime_root.exists():
+            shutil.rmtree(self._runtime_root, ignore_errors=True)
+        if self._runtime_state_path.exists():
+            self._runtime_state_path.unlink()
+        self._bootstrapped = False
+
     def _ensure_keep_file(self, path: Path) -> None:
         keep_path = path / ".keep"
         if not keep_path.exists():
@@ -412,28 +583,53 @@ class BusyPaths:
             normalized = f"{normalized}{default_suffix}"
         return normalized
 
-    def _refresh_manifest_locked(self) -> None:
+    def _read_manifest_locked(self) -> dict[str, Any]:
         manifest_path = self._runtime_manifest_path()
-        default_manifest = self._default_manifest()
-
         try:
-            current_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if not isinstance(current_manifest, dict):
-                current_manifest = {}
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if isinstance(manifest, dict):
+                return manifest
         except (FileNotFoundError, json.JSONDecodeError):
-            current_manifest = {}
+            pass
+        return {}
+
+    def _write_manifest_locked(self, manifest: dict[str, Any]) -> None:
+        manifest_path = self._runtime_manifest_path()
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    def _manifest_int(
+        self,
+        manifest: dict[str, Any],
+        key: str,
+        *,
+        default: int,
+    ) -> int:
+        try:
+            return int(manifest.get(key, default))
+        except (TypeError, ValueError):
+            return default
+
+    def _refresh_manifest_locked(self) -> None:
+        default_manifest = self._default_manifest()
+        current_manifest = self._read_manifest_locked()
 
         current_manifest.setdefault("created_at", default_manifest["created_at"])
         current_manifest["app"] = default_manifest["app"]
         current_manifest["version"] = default_manifest["version"]
+        current_manifest["busy_format_version"] = self.CURRENT_BUSY_FORMAT_VERSION
+        current_manifest.setdefault(
+            "database_schema_version",
+            self.CURRENT_DATABASE_SCHEMA_VERSION,
+        )
         current_manifest["instance_id"] = default_manifest["instance_id"]
         current_manifest["paths"] = default_manifest["paths"]
         current_manifest["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-        manifest_path.write_text(
-            json.dumps(current_manifest, ensure_ascii=True, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        self._write_manifest_locked(current_manifest)
 
     def _write_archive_locked(self) -> None:
         self.archive_path.parent.mkdir(parents=True, exist_ok=True)
@@ -522,6 +718,8 @@ class BusyPaths:
         return {
             "app": "BuSy",
             "version": 1,
+            "busy_format_version": self.CURRENT_BUSY_FORMAT_VERSION,
+            "database_schema_version": self.CURRENT_DATABASE_SCHEMA_VERSION,
             "created_at": timestamp,
             "updated_at": timestamp,
             "instance_id": os.getenv("BUSY_INSTANCE_ID", ""),

@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from utilities.security.passwords import hash_password
+from utilities.handleDocument.document import CURRENT_DATABASE_SCHEMA_VERSION
+
+if TYPE_CHECKING:
+    from utilities.handleDocument.document import BusyPaths
 
 
 SCHEMA_STATEMENTS: tuple[str, ...] = (
@@ -61,38 +66,35 @@ SUPERADMIN_SEED: dict[str, object] = {
 }
 
 
-def initialize_database(connection: sqlite3.Connection, db_path: str | Path) -> None:
+def migrate_database(
+    connection: sqlite3.Connection,
+    paths: "BusyPaths | None" = None,
+) -> bool:
+    current_version = get_database_user_version(connection)
+
+    if current_version > CURRENT_DATABASE_SCHEMA_VERSION:
+        raise RuntimeError(
+            "La base de datos requiere una version mas nueva de BuSy."
+        )
+
+    if current_version == CURRENT_DATABASE_SCHEMA_VERSION:
+        return False
+
     cursor = connection.cursor()
     try:
-        for statement in SCHEMA_STATEMENTS:
-            cursor.execute(statement)
+        while current_version < CURRENT_DATABASE_SCHEMA_VERSION:
+            if current_version == 0:
+                _migrate_database_0_to_1(cursor)
+                current_version = 1
+                continue
 
-        cursor.executemany(
-            "INSERT OR IGNORE INTO user_type (id, type) VALUES (?, ?)",
-            USER_TYPE_SEED,
-        )
-
-        cursor.execute(
-            """
-            INSERT INTO users (
-                id, user_type, username, fullname, cellphone, email, birthday, rfc, password
+            raise RuntimeError(
+                f"No existe migracion para base de datos version {current_version}."
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                SUPERADMIN_SEED["id"],
-                SUPERADMIN_SEED["user_type"],
-                SUPERADMIN_SEED["username"],
-                SUPERADMIN_SEED["fullname"],
-                SUPERADMIN_SEED["cellphone"],
-                SUPERADMIN_SEED["email"],
-                SUPERADMIN_SEED["birthday"],
-                SUPERADMIN_SEED["rfc"],
-                hash_password(str(SUPERADMIN_SEED["password"])),
-            ),
-        )
+
+        cursor.execute(f"PRAGMA user_version = {CURRENT_DATABASE_SCHEMA_VERSION}")
         connection.commit()
-        print(f"Base de datos inicializada desde cero en: {db_path}")
+        return True
     except Exception:
         connection.rollback()
         raise
@@ -100,17 +102,56 @@ def initialize_database(connection: sqlite3.Connection, db_path: str | Path) -> 
         cursor.close()
 
 
-def needs_database_initialization(connection: sqlite3.Connection) -> bool:
+def database_needs_migration(connection: sqlite3.Connection) -> bool:
+    current_version = get_database_user_version(connection)
+    return current_version < CURRENT_DATABASE_SCHEMA_VERSION
+
+
+def get_database_user_version(connection: sqlite3.Connection) -> int:
     cursor = connection.cursor()
     try:
-        cursor.execute(
-            """
-            SELECT name
-            FROM sqlite_master
-            WHERE type = 'table' AND name IN ('user_type', 'info_db', 'users')
-            """
-        )
-        tables = {row[0] for row in cursor.fetchall()}
-        return tables != {"user_type", "info_db", "users"}
+        cursor.execute("PRAGMA user_version")
+        row = cursor.fetchone()
+        return int(row[0] if row is not None else 0)
     finally:
         cursor.close()
+
+
+def initialize_database(connection: sqlite3.Connection, db_path: str | Path) -> None:
+    migrated = migrate_database(connection)
+    if migrated:
+        print(f"Base de datos inicializada o migrada en: {db_path}")
+
+
+def needs_database_initialization(connection: sqlite3.Connection) -> bool:
+    return database_needs_migration(connection)
+
+
+def _migrate_database_0_to_1(cursor: sqlite3.Cursor) -> None:
+    for statement in SCHEMA_STATEMENTS:
+        cursor.execute(statement)
+
+    cursor.executemany(
+        "INSERT OR IGNORE INTO user_type (id, type) VALUES (?, ?)",
+        USER_TYPE_SEED,
+    )
+
+    cursor.execute(
+        """
+        INSERT OR IGNORE INTO users (
+            id, user_type, username, fullname, cellphone, email, birthday, rfc, password
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            SUPERADMIN_SEED["id"],
+            SUPERADMIN_SEED["user_type"],
+            SUPERADMIN_SEED["username"],
+            SUPERADMIN_SEED["fullname"],
+            SUPERADMIN_SEED["cellphone"],
+            SUPERADMIN_SEED["email"],
+            SUPERADMIN_SEED["birthday"],
+            SUPERADMIN_SEED["rfc"],
+            hash_password(str(SUPERADMIN_SEED["password"])),
+        ),
+    )

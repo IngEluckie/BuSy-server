@@ -5,7 +5,7 @@ from pathlib import Path
 from sqlite3 import Error
 from typing import Any, List, Optional, Tuple
 
-from databases.bootstrap import initialize_database, needs_database_initialization
+from databases.bootstrap import database_needs_migration, migrate_database
 from utilities.handleDocument.document import BusyPaths
 
 
@@ -34,15 +34,18 @@ class Database:
             instance._managed_by_busy = paths.is_managed_path(resolved_path)
             instance.connection = sqlite3.connect(resolved_path, check_same_thread=False)
             instance.connection.row_factory = sqlite3.Row
-            if needs_database_initialization(instance.connection):
-                initialize_database(instance.connection, resolved_path)
-                instance._flush_archive()
+            instance._migrate_database_if_needed()
             instance.cursor = instance.connection.cursor()
             cls._instances[instance_key] = instance
             print(f"Conexión a la base de datos establecida en: {resolved_path}")
             return instance
         except Error as e:
             print(f"Error al conectar con la base de datos {resolved_path.name}, error:\n {e}")
+            raise
+        except Exception:
+            connection = getattr(instance, "connection", None) if "instance" in locals() else None
+            if connection is not None:
+                connection.close()
             raise
 
     @staticmethod
@@ -86,6 +89,27 @@ class Database:
         except Error as e:
             print(f"Error en executemany: {e}")
             self.connection.rollback()
+
+    def _migrate_database_if_needed(self) -> None:
+        if not database_needs_migration(self.connection):
+            return
+
+        backup_path = None
+        if getattr(self, "_managed_by_busy", False):
+            backup_path = self.paths.create_archive_backup()
+
+        try:
+            migrated = migrate_database(self.connection, self.paths)
+        except Exception as exc:
+            self.connection.close()
+            if backup_path is not None:
+                self.paths.restore_archive_backup(backup_path)
+            raise RuntimeError(
+                f"No se pudo migrar la base de datos '{self._db_path.name}'."
+            ) from exc
+
+        if migrated and getattr(self, "_managed_by_busy", False):
+            self.paths.update_database_schema_version()
 
     def _flush_archive(self) -> None:
         if getattr(self, "_managed_by_busy", False):
