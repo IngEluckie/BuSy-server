@@ -15,7 +15,16 @@ from typing import Any, Iterator
 import fcntl
 
 
-CURRENT_BUSY_FORMAT_VERSION = 1
+# IMPORTANT:
+# Any change to the persisted .busy archive structure must add a migration and
+# bump CURRENT_BUSY_FORMAT_VERSION. Examples: new required config files,
+# renamed paths, new storage folders, or manifest/settings/sysconfig shape changes.
+CURRENT_BUSY_FORMAT_VERSION = 2
+
+# IMPORTANT:
+# Any SQLite schema change must add a DB migration and bump
+# CURRENT_DATABASE_SCHEMA_VERSION. SQLite uses PRAGMA user_version as source
+# of truth for the active database schema version.
 CURRENT_DATABASE_SCHEMA_VERSION = 1
 
 
@@ -80,6 +89,11 @@ class BusyPaths:
     def settings_path(self) -> Path:
         self.bootstrap()
         return self._runtime_settings_path()
+
+    @property
+    def sysconfig_path(self) -> Path:
+        self.bootstrap()
+        return self._runtime_sysconfig_path()
 
     @property
     def env_path(self) -> Path:
@@ -291,6 +305,9 @@ class BusyPaths:
     def _runtime_settings_path(self) -> Path:
         return self._runtime_root / "config" / "settings.json"
 
+    def _runtime_sysconfig_path(self) -> Path:
+        return self._runtime_root / "config" / "sysconfig.json"
+
     def _runtime_env_path(self) -> Path:
         return self._runtime_root / "config" / "app.env"
 
@@ -382,6 +399,8 @@ class BusyPaths:
         self._ensure_runtime_defaults_locked()
 
     def _ensure_runtime_defaults_locked(self) -> None:
+        # Defaults are only for new or missing files. Existing .busy archives
+        # must be upgraded through versioned migrations, not by this method alone.
         self._runtime_root.mkdir(parents=True, exist_ok=True)
 
         for folder, children in self.DEFAULT_STRUCTURE.items():
@@ -400,6 +419,10 @@ class BusyPaths:
         self._ensure_file(
             self._runtime_settings_path(),
             self._default_settings(),
+        )
+        self._ensure_file(
+            self._runtime_sysconfig_path(),
+            self._default_sysconfig(),
         )
         self._ensure_env_example()
 
@@ -451,6 +474,10 @@ class BusyPaths:
                     self._migrate_busy_format_0_to_1_locked()
                     current_version = 1
                     continue
+                if current_version == 1:
+                    self._migrate_busy_format_1_to_2_locked()
+                    current_version = 2
+                    continue
 
                 raise RuntimeError(
                     f"No existe migracion para .busy version {current_version}."
@@ -476,6 +503,14 @@ class BusyPaths:
             "database_schema_version",
             self.CURRENT_DATABASE_SCHEMA_VERSION,
         )
+        self._write_manifest_locked(manifest)
+
+    def _migrate_busy_format_1_to_2_locked(self) -> None:
+        self._ensure_runtime_defaults_locked()
+        self._merge_sysconfig_locked()
+
+        manifest = self._read_manifest_locked()
+        manifest["busy_format_version"] = self.CURRENT_BUSY_FORMAT_VERSION
         self._write_manifest_locked(manifest)
 
     def _merge_settings_locked(self) -> None:
@@ -512,6 +547,24 @@ class BusyPaths:
 
         settings_path.parent.mkdir(parents=True, exist_ok=True)
         settings_path.write_text(
+            json.dumps(merged, ensure_ascii=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    def _merge_sysconfig_locked(self) -> None:
+        sysconfig_path = self._runtime_sysconfig_path()
+        default_sysconfig = self._default_sysconfig()
+
+        try:
+            current_sysconfig = json.loads(sysconfig_path.read_text(encoding="utf-8"))
+            if not isinstance(current_sysconfig, dict):
+                current_sysconfig = {}
+        except (FileNotFoundError, json.JSONDecodeError):
+            current_sysconfig = {}
+
+        merged = self._deep_merge(default_sysconfig, current_sysconfig)
+        sysconfig_path.parent.mkdir(parents=True, exist_ok=True)
+        sysconfig_path.write_text(
             json.dumps(merged, ensure_ascii=True, indent=2) + "\n",
             encoding="utf-8",
         )
@@ -726,10 +779,52 @@ class BusyPaths:
             "paths": {
                 "database": str(self._runtime_root / "db" / "main.sqlite3"),
                 "settings": str(self._runtime_settings_path()),
+                "sysconfig": str(self._runtime_sysconfig_path()),
                 "storage": str(self._runtime_root / "storage"),
                 "logs": str(self._runtime_root / "logs"),
                 "backups": str(self._runtime_root / "backups"),
                 "tmp": str(self._runtime_root / "tmp"),
+            },
+        }
+
+    def _default_sysconfig(self) -> dict[str, Any]:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        return {
+            "system": {
+                "name": "BuSy",
+                "description": "Business System",
+                "environment": os.getenv("BUSY_ENV", "development"),
+                "timezone": "America/Mexico_City",
+                "locale": "es-MX",
+                "maintenance_mode": False,
+            },
+            "ui": {
+                "theme": "default",
+                "public_base_path": "/",
+                "logo_path": "",
+                "favicon_path": "",
+            },
+            "security": {
+                "session_timeout_minutes": 60,
+                "allow_public_registration": False,
+                "password_min_length": 8,
+            },
+            "limits": {
+                "max_upload_mb": 25,
+                "max_search_results": 50,
+            },
+            "modules": {
+                "authentication": True,
+                "userconf": True,
+                "sysconf": True,
+                "scheduler": True,
+            },
+            "metadata": {
+                "version": 1,
+                "created_by": "system",
+                "updated_by": "system",
+                "created_at": timestamp,
+                "updated_at": timestamp,
             },
         }
 

@@ -11,6 +11,10 @@ if TYPE_CHECKING:
     from utilities.handleDocument.document import BusyPaths
 
 
+# IMPORTANT:
+# Schema changes must be implemented as ordered migrations. Do not modify
+# SCHEMA_STATEMENTS as the runtime DB contract without also bumping
+# CURRENT_DATABASE_SCHEMA_VERSION in utilities.handleDocument.document.
 SCHEMA_STATEMENTS: tuple[str, ...] = (
     """
     CREATE TABLE IF NOT EXISTS user_type (
@@ -70,6 +74,8 @@ def migrate_database(
     connection: sqlite3.Connection,
     paths: "BusyPaths | None" = None,
 ) -> bool:
+    # SQLite PRAGMA user_version is the persisted schema version. New schema
+    # versions must be migrated in order before the app uses the database.
     current_version = get_database_user_version(connection)
 
     if current_version > CURRENT_DATABASE_SCHEMA_VERSION:

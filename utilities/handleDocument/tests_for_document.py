@@ -101,6 +101,7 @@ class BusyArchivePersistenceTests(unittest.TestCase):
 
         self.assertIn("meta/manifest.json", names)
         self.assertIn("config/settings.json", names)
+        self.assertIn("config/sysconfig.json", names)
         self.assertIn("config/app.env.example", names)
         self.assertIn("db/.keep", names)
         self.assertIn("logs/.keep", names)
@@ -114,6 +115,10 @@ class BusyArchivePersistenceTests(unittest.TestCase):
             manifest["database_schema_version"],
             CURRENT_DATABASE_SCHEMA_VERSION,
         )
+
+        sysconfig = self._read_archive_json("config/sysconfig.json")
+        self.assertEqual(sysconfig["system"]["name"], "BuSy")
+        self.assertTrue(sysconfig["modules"]["sysconf"])
 
     def test_legacy_busy_archive_is_migrated_and_preserves_files(self) -> None:
         self._write_archive(
@@ -156,6 +161,28 @@ class BusyArchivePersistenceTests(unittest.TestCase):
         self.assertEqual(settings["files"]["root"], str(paths.runtime_root / "storage"))
         self.assertIn("custom", settings["files"]["categories"])
         self.assertIn("documents", settings["files"]["categories"])
+
+    def test_busy_format_one_archive_gets_sysconfig_in_config(self) -> None:
+        manifest = self._legacy_manifest()
+        manifest["busy_format_version"] = 1
+        manifest["database_schema_version"] = CURRENT_DATABASE_SCHEMA_VERSION
+        self._write_archive(
+            {
+                "meta/manifest.json": json.dumps(manifest),
+                "config/settings.json": "{}",
+                "storage/documents/legacy.txt": "legacy data",
+            }
+        )
+
+        bootstrap_busy_workspace(root_dir=self.root)
+
+        manifest = self._read_archive_json("meta/manifest.json")
+        sysconfig = self._read_archive_json("config/sysconfig.json")
+
+        self.assertEqual(manifest["busy_format_version"], CURRENT_BUSY_FORMAT_VERSION)
+        self.assertEqual(sysconfig["system"]["name"], "BuSy")
+        self.assertEqual(sysconfig["system"]["locale"], "es-MX")
+        self.assertTrue(sysconfig["modules"]["sysconf"])
 
     def test_busy_migration_failure_restores_backup_and_fails(self) -> None:
         self._write_archive(
