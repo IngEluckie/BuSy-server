@@ -24,6 +24,7 @@ import os
 # Import modules
 from databases.singleton import Database
 from routers import authentication, userconf
+from routers.pos_operations.operaciones import articulos
 from utilities.handleDocument.document import BusyPaths
 from utilities.scheduler.scheduler import Scheduler
 from utilities.terminalTools import CsvManager, Logger
@@ -32,6 +33,7 @@ from utilities.terminalTools import CsvManager, Logger
 app: FastAPI = FastAPI()
 app.include_router(authentication.router_authentication)
 app.include_router(userconf.router_userconf)
+app.include_router(articulos.router_articulos)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # O especifica tu dominio 'http://localhost:5500', etc.

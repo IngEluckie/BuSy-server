@@ -34,6 +34,7 @@ class Database:
             instance._managed_by_busy = paths.is_managed_path(resolved_path)
             instance.connection = sqlite3.connect(resolved_path, check_same_thread=False)
             instance.connection.row_factory = sqlite3.Row
+            instance.connection.execute("PRAGMA foreign_keys = ON")
             instance._migrate_database_if_needed()
             instance.cursor = instance.connection.cursor()
             cls._instances[instance_key] = instance

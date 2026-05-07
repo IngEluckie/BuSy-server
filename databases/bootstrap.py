@@ -94,6 +94,11 @@ def migrate_database(
                 current_version = 1
                 continue
 
+            if current_version == 1:
+                _migrate_database_1_to_2(cursor)
+                current_version = 2
+                continue
+
             raise RuntimeError(
                 f"No existe migracion para base de datos version {current_version}."
             )
@@ -160,4 +165,148 @@ def _migrate_database_0_to_1(cursor: sqlite3.Cursor) -> None:
             SUPERADMIN_SEED["rfc"],
             hash_password(str(SUPERADMIN_SEED["password"])),
         ),
+    )
+
+
+def _migrate_database_1_to_2(cursor: sqlite3.Cursor) -> None:
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS products (
+            id TEXT NOT NULL,
+            type TEXT NOT NULL DEFAULT 'simple'
+                CHECK (type IN ('simple')),
+            name TEXT NOT NULL,
+            short_description TEXT NOT NULL,
+            long_description TEXT NOT NULL DEFAULT '',
+            regular_price_cents INTEGER NOT NULL
+                CHECK (regular_price_cents >= 0),
+            sale_price_cents INTEGER
+                CHECK (sale_price_cents IS NULL OR sale_price_cents >= 0),
+            sku TEXT NOT NULL,
+            tracking_mode TEXT NOT NULL DEFAULT 'tracked'
+                CHECK (tracking_mode IN ('tracked', 'untracked')),
+            quantity INTEGER
+                CHECK (quantity IS NULL OR quantity >= 0),
+            reservation_policy TEXT
+                CHECK (reservation_policy IN ('disabled', 'allowed')),
+            low_stock_threshold INTEGER
+                CHECK (low_stock_threshold IS NULL OR low_stock_threshold >= 0),
+            stock_status TEXT NOT NULL DEFAULT 'in_stock'
+                CHECK (stock_status IN ('in_stock', 'out_of_stock', 'backorder')),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1
+                CHECK (is_active IN (0, 1)),
+            PRIMARY KEY(id),
+            CHECK (
+                (
+                    tracking_mode = 'tracked'
+                    AND quantity IS NOT NULL
+                )
+                OR (
+                    tracking_mode = 'untracked'
+                    AND quantity IS NULL
+                    AND reservation_policy IS NULL
+                    AND low_stock_threshold IS NULL
+                )
+            )
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS product_attributes (
+            id TEXT NOT NULL,
+            product_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            visible INTEGER NOT NULL DEFAULT 1
+                CHECK (visible IN (0, 1)),
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(id),
+            FOREIGN KEY(product_id) REFERENCES products(id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS product_attribute_values (
+            id TEXT NOT NULL,
+            attribute_id TEXT NOT NULL,
+            value TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(id),
+            FOREIGN KEY(attribute_id) REFERENCES product_attributes(id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS product_images (
+            id TEXT NOT NULL,
+            product_id TEXT NOT NULL,
+            url TEXT NOT NULL,
+            alt_text TEXT,
+            is_primary INTEGER NOT NULL DEFAULT 0
+                CHECK (is_primary IN (0, 1)),
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(id),
+            FOREIGN KEY(product_id) REFERENCES products(id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS inventory_adjustments (
+            id TEXT NOT NULL,
+            product_id TEXT NOT NULL,
+            previous_quantity INTEGER NOT NULL
+                CHECK (previous_quantity >= 0),
+            new_quantity INTEGER NOT NULL
+                CHECK (new_quantity >= 0),
+            reason TEXT NOT NULL,
+            reference TEXT,
+            user_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(id),
+            FOREIGN KEY(product_id) REFERENCES products(id)
+                ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+                ON DELETE NO ACTION
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_products_active_sku
+        ON products(sku)
+        WHERE is_active = 1
+        """
+    )
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_active ON products(is_active)")
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_product_attributes_product_id
+        ON product_attributes(product_id)
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_product_images_product_id
+        ON product_images(product_id)
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_inventory_adjustments_product_id
+        ON inventory_adjustments(product_id)
+        """
     )
