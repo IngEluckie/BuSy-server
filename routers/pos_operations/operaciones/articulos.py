@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
+import json
+import shutil
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
+from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from databases.singleton import Database
@@ -24,6 +28,14 @@ StockStatus = Literal["in_stock", "out_of_stock", "backorder"]
 
 READ_USER_TYPES = {1, 2, 3, 4}
 WRITE_USER_TYPES = {1, 2, 3}
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+ALLOWED_IMAGE_MIME_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+DEFAULT_MAX_UPLOAD_MB = 25
+IMAGE_CHUNK_SIZE = 1024 * 1024
 
 
 class ApiModel(BaseModel):
@@ -199,6 +211,15 @@ class ProductListResponse(ApiModel):
     total: int
 
 
+class ProductImageOrderInput(ApiModel):
+    id: str = Field(min_length=1)
+    is_primary: bool = Field(default=False, alias="isPrimary")
+
+
+class ProductImagesOrderRequest(ApiModel):
+    images: list[ProductImageOrderInput]
+
+
 class AjustarExistenciasRequest(ApiModel):
     cantidad: int = Field(ge=0)
     motivo: str = Field(min_length=1)
@@ -261,6 +282,108 @@ def _flush_archive(database: Database) -> None:
         flush()
 
 
+def _image_url(image_id: str) -> str:
+    return f"/articulos/imagenes/{image_id}"
+
+
+def _product_images_dir(database: Database, product_id: str) -> Path:
+    paths = getattr(database, "paths", None)
+    if paths is None:
+        raise HTTPException(status_code=500, detail="Image storage is not available")
+
+    image_dir = paths.resolve_storage_path("images", f"products/{product_id}")
+    image_dir.mkdir(parents=True, exist_ok=True)
+    return image_dir
+
+
+def _get_max_upload_bytes(database: Database) -> int:
+    paths = getattr(database, "paths", None)
+    if paths is None:
+        return DEFAULT_MAX_UPLOAD_MB * 1024 * 1024
+
+    try:
+        payload = json.loads(paths.sysconfig_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return DEFAULT_MAX_UPLOAD_MB * 1024 * 1024
+
+    limits = payload.get("limits") if isinstance(payload, dict) else None
+    raw_limit = limits.get("max_upload_mb") if isinstance(limits, dict) else DEFAULT_MAX_UPLOAD_MB
+    try:
+        max_upload_mb = int(raw_limit)
+    except (TypeError, ValueError):
+        max_upload_mb = DEFAULT_MAX_UPLOAD_MB
+
+    return max(1, max_upload_mb) * 1024 * 1024
+
+
+def _normalize_image_extension(filename: str | None, content_type: str | None) -> str:
+    suffix = Path(filename or "").suffix.lower()
+    normalized_mime = (content_type or "").split(";")[0].strip().lower()
+
+    if normalized_mime not in ALLOWED_IMAGE_MIME_TYPES:
+        raise HTTPException(status_code=415, detail="Image type is not supported")
+
+    if suffix and suffix not in ALLOWED_IMAGE_EXTENSIONS:
+        raise HTTPException(status_code=415, detail="Image extension is not supported")
+
+    expected_suffix = ALLOWED_IMAGE_MIME_TYPES[normalized_mime]
+    if suffix and suffix not in {expected_suffix, ".jpeg" if expected_suffix == ".jpg" else expected_suffix}:
+        raise HTTPException(status_code=415, detail="Image extension does not match image type")
+
+    if suffix in ALLOWED_IMAGE_EXTENSIONS:
+        return suffix
+
+    return expected_suffix
+
+
+def _find_product_image_file(database: Database, product_id: str, image_id: str) -> Path | None:
+    image_dir = _product_images_dir(database, product_id)
+    for extension in ALLOWED_IMAGE_EXTENSIONS:
+        candidate = image_dir / f"{image_id}{extension}"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _delete_product_image_file(database: Database, product_id: str, image_id: str) -> None:
+    image_path = _find_product_image_file(database, product_id, image_id)
+    if image_path is not None:
+        image_path.unlink(missing_ok=True)
+
+
+async def _save_uploaded_product_image(
+    database: Database,
+    product_id: str,
+    image_id: str,
+    file: UploadFile,
+) -> Path:
+    extension = _normalize_image_extension(file.filename, file.content_type)
+    image_path = _product_images_dir(database, product_id) / f"{image_id}{extension}"
+    max_bytes = _get_max_upload_bytes(database)
+    total_bytes = 0
+
+    try:
+        with image_path.open("wb") as handle:
+            while True:
+                chunk = await file.read(IMAGE_CHUNK_SIZE)
+                if not chunk:
+                    break
+                total_bytes += len(chunk)
+                if total_bytes > max_bytes:
+                    handle.close()
+                    image_path.unlink(missing_ok=True)
+                    raise HTTPException(status_code=413, detail="Image exceeds the upload size limit")
+                handle.write(chunk)
+    finally:
+        await file.close()
+
+    if total_bytes == 0:
+        image_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Image file is empty")
+
+    return image_path
+
+
 def _sku_exists(cursor: sqlite3.Cursor, sku: str, excluding_product_id: str | None = None) -> bool:
     params: list[object] = [sku]
     query = "SELECT id FROM products WHERE sku = ? AND is_active = 1"
@@ -274,6 +397,67 @@ def _sku_exists(cursor: sqlite3.Cursor, sku: str, excluding_product_id: str | No
 def _ensure_unique_sku(cursor: sqlite3.Cursor, sku: str, excluding_product_id: str | None = None) -> None:
     if _sku_exists(cursor, sku, excluding_product_id):
         raise HTTPException(status_code=409, detail="SKU already exists")
+
+
+def _ensure_product_active(cursor: sqlite3.Cursor, product_id: str) -> None:
+    cursor.execute("SELECT id FROM products WHERE id = ? AND is_active = 1", (product_id,))
+    if cursor.fetchone() is None:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+
+def _count_product_images(cursor: sqlite3.Cursor, product_id: str) -> int:
+    cursor.execute(
+        "SELECT COUNT(*) AS total FROM product_images WHERE product_id = ?",
+        (product_id,),
+    )
+    return int(cursor.fetchone()["total"])
+
+
+def _fetch_product_image_row(
+    cursor: sqlite3.Cursor,
+    image_id: str,
+    *,
+    product_id: str | None = None,
+) -> sqlite3.Row:
+    params: list[object] = [image_id]
+    query = "SELECT * FROM product_images WHERE id = ?"
+    if product_id is not None:
+        query += " AND product_id = ?"
+        params.append(product_id)
+
+    cursor.execute(query, tuple(params))
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return row
+
+
+def _row_to_product_image(row: sqlite3.Row) -> ProductImageOutput:
+    return ProductImageOutput(
+        id=row["id"],
+        url=row["url"],
+        altText=row["alt_text"],
+        isPrimary=_db_to_bool(row["is_primary"]),
+        order=row["sort_order"],
+    )
+
+
+def _promote_first_product_image(cursor: sqlite3.Cursor, product_id: str) -> None:
+    cursor.execute(
+        """
+        SELECT id FROM product_images
+        WHERE product_id = ?
+        ORDER BY sort_order, url
+        LIMIT 1
+        """,
+        (product_id,),
+    )
+    row = cursor.fetchone()
+    if row is not None:
+        cursor.execute(
+            "UPDATE product_images SET is_primary = 1 WHERE id = ?",
+            (row["id"],),
+        )
 
 
 def _insert_product(
@@ -631,11 +815,213 @@ def _copy_output_to_input(product: SimpleProductOutput, *, sku: str, name: str) 
     )
 
 
+def _copy_product_image_files_and_rows(
+    cursor: sqlite3.Cursor,
+    database: Database,
+    *,
+    source_product_id: str,
+    target_product_id: str,
+) -> None:
+    cursor.execute(
+        """
+        SELECT * FROM product_images
+        WHERE product_id = ?
+        ORDER BY sort_order, url
+        """,
+        (source_product_id,),
+    )
+    rows = cursor.fetchall()
+
+    for sort_order, row in enumerate(rows):
+        source_image_id = row["id"]
+        target_image_id = _new_id()
+        target_url = row["url"]
+        source_file = _find_product_image_file(database, source_product_id, source_image_id)
+
+        if source_file is not None:
+            target_file = _product_images_dir(database, target_product_id) / f"{target_image_id}{source_file.suffix}"
+            shutil.copy2(source_file, target_file)
+            target_url = _image_url(target_image_id)
+
+        cursor.execute(
+            """
+            INSERT INTO product_images (
+                id, product_id, url, alt_text, is_primary, sort_order
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                target_image_id,
+                target_product_id,
+                target_url,
+                row["alt_text"],
+                row["is_primary"],
+                sort_order,
+            ),
+        )
+
+
 @router_articulos.get("/ison")
 async def ison():
     return {
         "message": "Yes, I'm on from '/articulos'",
     }
+
+
+@router_articulos.get("/imagenes/{image_id}")
+async def obtener_imagen_articulo(
+    image_id: str,
+    user: User = Depends(current_user),
+):
+    _require_read(user)
+    database = Database()
+    cursor = database.connection.cursor()
+
+    try:
+        image_row = _fetch_product_image_row(cursor, image_id)
+        image_path = _find_product_image_file(database, image_row["product_id"], image_id)
+        if image_path is None:
+            raise HTTPException(status_code=404, detail="Image file not found")
+
+        media_type = next(
+            (
+                mime_type
+                for mime_type, extension in ALLOWED_IMAGE_MIME_TYPES.items()
+                if extension == image_path.suffix.lower()
+            ),
+            "application/octet-stream",
+        )
+        return FileResponse(image_path, media_type=media_type)
+    finally:
+        cursor.close()
+
+
+@router_articulos.post(
+    "/{product_id}/imagenes",
+    response_model=ProductImageOutput,
+    status_code=status.HTTP_201_CREATED,
+)
+async def subir_imagen_articulo(
+    product_id: str,
+    file: UploadFile = File(...),
+    user: User = Depends(current_user),
+):
+    _require_write(user)
+    database = Database()
+    cursor = database.connection.cursor()
+    image_id = _new_id()
+    image_path: Path | None = None
+
+    try:
+        _ensure_product_active(cursor, product_id)
+        image_path = await _save_uploaded_product_image(database, product_id, image_id, file)
+        is_primary = _count_product_images(cursor, product_id) == 0
+
+        with database.connection:
+            cursor.execute(
+                """
+                INSERT INTO product_images (
+                    id, product_id, url, alt_text, is_primary, sort_order
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    image_id,
+                    product_id,
+                    _image_url(image_id),
+                    file.filename,
+                    _bool_to_db(is_primary),
+                    _count_product_images(cursor, product_id),
+                ),
+            )
+        _flush_archive(database)
+        return _row_to_product_image(_fetch_product_image_row(cursor, image_id, product_id=product_id))
+    except Exception:
+        if image_path is not None:
+            image_path.unlink(missing_ok=True)
+        raise
+    finally:
+        cursor.close()
+
+
+@router_articulos.patch("/{product_id}/imagenes", response_model=SimpleProductOutput)
+async def ordenar_imagenes_articulo(
+    product_id: str,
+    payload: ProductImagesOrderRequest,
+    user: User = Depends(current_user),
+):
+    _require_write(user)
+    database = Database()
+    cursor = database.connection.cursor()
+
+    try:
+        with database.connection:
+            _ensure_product_active(cursor, product_id)
+            requested_ids = [image.id for image in payload.images]
+            if len(requested_ids) != len(set(requested_ids)):
+                raise HTTPException(status_code=400, detail="Image order contains duplicates")
+
+            cursor.execute(
+                "SELECT id FROM product_images WHERE product_id = ?",
+                (product_id,),
+            )
+            existing_ids = {row["id"] for row in cursor.fetchall()}
+            if set(requested_ids) != existing_ids:
+                raise HTTPException(status_code=400, detail="Image order must include every product image")
+
+            primary_ids = [image.id for image in payload.images if image.is_primary]
+            primary_id = primary_ids[0] if primary_ids else (requested_ids[0] if requested_ids else None)
+
+            cursor.execute(
+                "UPDATE product_images SET is_primary = 0 WHERE product_id = ?",
+                (product_id,),
+            )
+            for sort_order, image in enumerate(payload.images):
+                cursor.execute(
+                    """
+                    UPDATE product_images
+                    SET sort_order = ?, is_primary = ?
+                    WHERE product_id = ? AND id = ?
+                    """,
+                    (
+                        sort_order,
+                        _bool_to_db(image.id == primary_id),
+                        product_id,
+                        image.id,
+                    ),
+                )
+        _flush_archive(database)
+        return _fetch_product(cursor, product_id)
+    finally:
+        cursor.close()
+
+
+@router_articulos.delete("/{product_id}/imagenes/{image_id}", response_model=SimpleProductOutput)
+async def eliminar_imagen_articulo(
+    product_id: str,
+    image_id: str,
+    user: User = Depends(current_user),
+):
+    _require_write(user)
+    database = Database()
+    cursor = database.connection.cursor()
+
+    try:
+        with database.connection:
+            _ensure_product_active(cursor, product_id)
+            image_row = _fetch_product_image_row(cursor, image_id, product_id=product_id)
+            was_primary = _db_to_bool(image_row["is_primary"])
+            cursor.execute(
+                "DELETE FROM product_images WHERE product_id = ? AND id = ?",
+                (product_id, image_id),
+            )
+            if was_primary:
+                _promote_first_product_image(cursor, product_id)
+        _delete_product_image_file(database, product_id, image_id)
+        _flush_archive(database)
+        return _fetch_product(cursor, product_id)
+    finally:
+        cursor.close()
 
 
 @router_articulos.post(
@@ -852,7 +1238,14 @@ async def clonar_articulo(
             name = clone_options.name or f"{original.general.name} (clon)"
             _ensure_unique_sku(cursor, sku)
             product = _copy_output_to_input(original, sku=sku, name=name)
+            product = product.model_copy(update={"media": ProductMediaInput(images=[])})
             _insert_product(cursor, product, product_id=new_product_id, created_at=now, updated_at=now)
+            _copy_product_image_files_and_rows(
+                cursor,
+                database,
+                source_product_id=product_id,
+                target_product_id=new_product_id,
+            )
         _flush_archive(database)
         return _fetch_product(cursor, new_product_id)
     except HTTPException:
