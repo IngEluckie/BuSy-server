@@ -549,7 +549,7 @@ def _replace_product(
     cursor.execute("DELETE FROM product_attributes WHERE product_id = ?", (product_id,))
     cursor.execute("DELETE FROM product_images WHERE product_id = ?", (product_id,))
     _replace_product_attributes(cursor, product_id, product.attributes)
-    _replace_product_images(cursor, product_id, product.media.images)
+    _replace_product_images(cursor, product_id, product.media.images, preserve_input_ids=True)
 
 
 def _replace_product_attributes(
@@ -585,6 +585,8 @@ def _replace_product_images(
     cursor: sqlite3.Cursor,
     product_id: str,
     images: list[ProductImageInput],
+    *,
+    preserve_input_ids: bool = False,
 ) -> None:
     primary_seen = False
     for sort_order, image in enumerate(images):
@@ -598,7 +600,7 @@ def _replace_product_images(
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
-                _new_id(),
+                image.id if preserve_input_ids and image.id else _new_id(),
                 product_id,
                 image.url,
                 image.alt_text,
@@ -746,6 +748,7 @@ def _merge_patch(existing: SimpleProductOutput, patch: SimpleProductPatch) -> Si
         else ProductMediaInput(
             images=[
                 ProductImageInput(
+                    id=image.id,
                     url=image.url,
                     altText=image.alt_text,
                     isPrimary=image.is_primary,

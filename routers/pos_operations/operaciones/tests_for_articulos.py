@@ -328,6 +328,35 @@ class ArticleRouterTests(unittest.TestCase):
         self.assertTrue(images[0]["isPrimary"])
         self.assertFalse(images[1]["isPrimary"])
 
+    def test_edit_product_preserves_existing_image_ids_and_urls(self) -> None:
+        product = self._create_product()
+        first_image = self._upload_image(product["id"], filename="first.png", content=b"first")
+        second_image = self._upload_image(product["id"], filename="second.png", content=b"second")
+
+        edit_response = self.client.patch(
+            f"/articulos/{product['id']}/editar",
+            json={
+                "general": {
+                    "name": "Vestido azul editado",
+                }
+            },
+        )
+        self.assertEqual(edit_response.status_code, 200)
+
+        images = edit_response.json()["media"]["images"]
+        self.assertEqual([image["id"] for image in images], [first_image["id"], second_image["id"]])
+        self.assertEqual([image["url"] for image in images], [first_image["url"], second_image["url"]])
+
+        first_image_response = self.client.get(first_image["url"])
+        self.assertEqual(first_image_response.status_code, 200)
+        self.assertEqual(first_image_response.content, b"first")
+
+        delete_response = self.client.delete(f"/articulos/{product['id']}/imagenes/{first_image['id']}")
+        self.assertEqual(delete_response.status_code, 200)
+        remaining_images = delete_response.json()["media"]["images"]
+        self.assertEqual([image["id"] for image in remaining_images], [second_image["id"]])
+        self.assertTrue(remaining_images[0]["isPrimary"])
+
     def test_clone_copies_product_image_files(self) -> None:
         product = self._create_product()
         original_image = self._upload_image(product["id"], filename="vestido.jpeg", content=b"clone-source", content_type="image/jpeg")
