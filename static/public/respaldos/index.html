@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Respaldos</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="page-shell">
+        <header class="page-header">
+            <div>
+                <p class="eyebrow">Administración</p>
+                <h1>Respaldos .busy</h1>
+            </div>
+            <button type="button" class="secondary-button" id="back-button">Regresar</button>
+        </header>
+
+        <section class="backup-panel" aria-label="Administrar respaldos">
+            <div class="action-grid">
+                <article class="action-card">
+                    <div>
+                        <h2>Descargar respaldo</h2>
+                        <p>Genera una copia actual del archivo persistente del sistema.</p>
+                    </div>
+                    <button type="button" class="primary-button" id="download-button">
+                        Descargar .busy
+                    </button>
+                </article>
+
+                <article class="action-card">
+                    <div>
+                        <h2>Subir respaldo</h2>
+                        <p>Reemplaza el archivo persistente por otro respaldo válido.</p>
+                    </div>
+                    <form id="upload-form" class="upload-form">
+                        <label class="file-picker" for="busy-file">
+                            <span id="file-name">Seleccionar archivo .busy</span>
+                            <input id="busy-file" name="file" type="file" required>
+                        </label>
+                        <button type="submit" class="danger-button">Subir y reemplazar</button>
+                    </form>
+                </article>
+            </div>
+
+            <p class="status" id="status" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="backup-panel automatic-panel" aria-label="Respaldos automáticos">
+            <div class="section-header">
+                <div>
+                    <h2>Respaldos automáticos</h2>
+                    <p>Copias creadas antes de una actualización manual del archivo .busy.</p>
+                </div>
+                <button type="button" class="secondary-button" id="refresh-backups-button">Actualizar</button>
+            </div>
+            <div class="backup-list" id="automatic-backups-list">
+                <div class="empty-state">Cargando respaldos automáticos...</div>
+            </div>
+        </section>
+    </main>
+
+    <div class="modal-backdrop" id="confirm-modal" hidden>
+        <section
+            class="confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-title"
+            aria-describedby="confirm-message"
+        >
+            <h2 id="confirm-title">Confirmar actualización</h2>
+            <p id="confirm-message">
+                Esta acción cambiará la información actual del sistema, considere sus cambios
+            </p>
+            <div class="modal-actions">
+                <button type="button" class="secondary-button" id="cancel-upload-button">Cancelar</button>
+                <button type="button" class="danger-button" id="accept-upload-button">Aceptar</button>
+            </div>
+        </section>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
