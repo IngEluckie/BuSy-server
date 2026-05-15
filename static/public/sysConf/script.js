@@ -1,3 +1,9 @@
+import EditUser from "../userconf/modules/editUser.js";
+import AddUser from "../userconf/modules/addUser.js";
+import DeleteUser from "../userconf/modules/deleteUser.js";
+import GenerateBadge from "../userconf/modules/generateBadge.js";
+import UploadDocumentation from "../userconf/modules/uploadDocumentation.js";
+
 const icons = {
     layers: `
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -87,22 +93,49 @@ const sections = {
     },
     users: {
         title: "Administración de usuarios",
-        description: "Revisa el estado general de accesos, roles y permisos del sistema.",
+        description: "Administra altas, cambios, eliminaciones, gafetes y documentación de usuarios.",
+        content: renderUsersSection
+    },
+    node: {
+        title: "Configuración de nodo",
+        description: "Administra la identidad, conexión y sincronización del nodo local.",
         cards: [
-            ["Administradores", "2 usuarios con control total del sistema."],
-            ["Operadores", "8 cuentas activas para ventas, almacén y reportes."],
-            ["Invitaciones", "1 invitación pendiente de activación."]
+            ["Nodo local", "Define el identificador y estado operativo del nodo."],
+            ["Conectividad", "Revisa parámetros de comunicación con otros servicios."],
+            ["Sincronización", "Prepara reglas de intercambio entre nodos del sistema."]
         ],
         rows: [
-            ["Política de acceso", "Contraseña obligatoria para todas las cuentas"],
-            ["Última revisión", "14 mayo 2026"],
-            ["Estado", "Permisos sincronizados"]
+            ["Estado del nodo", "Pendiente de configurar"],
+            ["Última sincronización", "Sin registro disponible"],
+            ["Modo de operación", "Local"]
+        ]
+    },
+    wordpress: {
+        title: "Wordpress Sync",
+        description: "Gestiona la sincronización entre Business System y Wordpress.",
+        cards: [
+            ["Conexión Wordpress", "Configura el sitio y las credenciales de integración."],
+            ["Catálogo", "Sincroniza productos, imágenes y disponibilidad."],
+            ["Operaciones", "Monitorea tareas de publicación y actualización."]
+        ],
+        rows: [
+            ["Estado de conexión", "Pendiente de configurar"],
+            ["Última ejecución", "Sin registro disponible"],
+            ["Sincronización automática", "No configurada"]
         ]
     }
 };
 
 const LOGIN_PATH = "/login/";
 const COMPANY_PROFILE_ENDPOINT = "/systemconf/company-profile";
+const SEARCH_USERS_ENDPOINT = "/userconf/search_byusername";
+const USER_MODULES = {
+    edit: EditUser,
+    add: AddUser,
+    delete: DeleteUser,
+    badge: GenerateBadge,
+    docs: UploadDocumentation
+};
 const COMPANY_FIELD_DEFAULTS = {
     legal_name: "",
     trade_name: "Business System Demo",
@@ -128,15 +161,24 @@ const COMPANY_FIELD_DEFAULTS = {
 const sectionContent = document.querySelector("#sectionContent");
 const tabButtons = document.querySelectorAll(".tab-button");
 const saveButton = document.querySelector(".save-button");
+const actionBar = document.querySelector(".action-bar");
 
 let activeSectionKey = "system";
 let companyProfile = null;
 let companyRequestId = 0;
+let activeUserModule = null;
 const companyUi = {
     isLoading: false,
     isSaving: false,
     message: "Carga los datos registrados para editarlos.",
     kind: "info"
+};
+const userState = {
+    activeView: "edit",
+    selectedUsername: null,
+    selectedUserInfo: null,
+    searchRequestId: 0,
+    selectedUserRequestId: 0
 };
 
 function getAuthHeader() {
@@ -216,8 +258,21 @@ function setCompanyUi(message, kind = "info", state = {}) {
 }
 
 function renderActiveSection() {
+    if (activeSectionKey !== "users") {
+        destroyActiveUserModule();
+    }
+
     const section = sections[activeSectionKey] || sections.system;
     sectionContent.innerHTML = section.content ? section.content() : renderSimpleSection(section);
+
+    if (actionBar) {
+        actionBar.hidden = activeSectionKey === "users";
+    }
+
+    if (activeSectionKey === "users") {
+        initUsersSection();
+        return;
+    }
 
     if (activeSectionKey === "company") {
         setCompanyUi(companyUi.message, companyUi.kind, {
@@ -527,6 +582,351 @@ async function saveCompanyProfile() {
     }
 }
 
+function renderUsersSection() {
+    return `
+        <div class="users-settings">
+            <div class="section-copy">
+                <h2>Administración de usuarios</h2>
+                <p>Busca usuarios y gestiona altas, cambios, eliminaciones, gafetes y documentación desde la configuración global.</p>
+            </div>
+
+            <div class="users-layout">
+                <section class="users-panel users-search-panel" aria-label="Usuarios">
+                    <div class="users-panel-header">
+                        <label class="users-label" for="user-search">Buscar usuario</label>
+                        <div class="users-search-row">
+                            <input id="user-search" class="users-input" type="search" placeholder="Nombre, ID, correo..." autocomplete="off">
+                            <button type="button" class="users-icon-button" id="user-search-btn" aria-label="Buscar">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path d="M10 4a6 6 0 1 0 4.47 10.03l4.25 4.25a1 1 0 0 0 1.41-1.41l-4.25-4.25A6 6 0 0 0 10 4Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="user-list" id="user-list" role="listbox" aria-label="Resultados"></div>
+                    <p class="hint" id="user-hint">Escribe para buscar usuarios.</p>
+                </section>
+
+                <section class="users-panel users-work-panel" aria-label="Funciones">
+                    <nav class="function-tabs" aria-label="Funciones de usuario">
+                        <button type="button" class="tab is-active" data-view="edit">Editar usuario</button>
+                        <button type="button" class="tab" data-view="add">Agregar usuario</button>
+                        <button type="button" class="tab" data-view="delete">Eliminar usuario</button>
+                        <button type="button" class="tab" data-view="badge">Generar gafete</button>
+                        <button type="button" class="tab" data-view="docs">Documentación</button>
+                    </nav>
+
+                    <section class="function-content" id="function-content" aria-live="polite">
+                        <div id="module-root" class="module-root">
+                            <div class="user-state">Selecciona una función para comenzar.</div>
+                        </div>
+                    </section>
+                </section>
+            </div>
+        </div>
+    `;
+}
+
+function initUsersSection() {
+    userState.selectedUsername = null;
+    userState.selectedUserInfo = null;
+    renderUserListState("Escribe para buscar.", "info");
+
+    document.querySelectorAll(".function-tabs .tab").forEach((tab) => {
+        tab.addEventListener("click", () => setActiveUserTab(tab));
+    });
+
+    const defaultTab = document.querySelector(".function-tabs .tab.is-active");
+    if (defaultTab) {
+        setActiveUserTab(defaultTab);
+    }
+
+    const input = document.getElementById("user-search");
+    const searchBtn = document.getElementById("user-search-btn");
+    const debouncedSearch = debounce(runUserSearch, 250);
+
+    input?.addEventListener("input", debouncedSearch);
+    input?.addEventListener("search", runUserSearch);
+    input?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") runUserSearch();
+    });
+    searchBtn?.addEventListener("click", runUserSearch);
+}
+
+function destroyActiveUserModule() {
+    try {
+        activeUserModule?.destroy?.();
+    } finally {
+        activeUserModule = null;
+    }
+}
+
+function setUserHint(message, kind = "info") {
+    const hintEl = document.getElementById("user-hint");
+    if (!hintEl) return;
+    hintEl.textContent = message;
+    hintEl.dataset.kind = kind;
+}
+
+function renderUserListState(message, kind = "info") {
+    const listEl = document.getElementById("user-list");
+    if (!listEl) return;
+    listEl.innerHTML = "";
+
+    const el = document.createElement("div");
+    el.className = `user-state${kind === "loading" ? " is-loading" : ""}${kind === "error" ? " is-error" : ""}`;
+    el.textContent = message;
+    listEl.appendChild(el);
+}
+
+function renderUserModuleState(message, kind = "info") {
+    const mountEl = document.getElementById("module-root");
+    if (!mountEl) return;
+    mountEl.innerHTML = "";
+
+    const el = document.createElement("div");
+    el.className = `user-state${kind === "loading" ? " is-loading" : ""}${kind === "error" ? " is-error" : ""}`;
+    el.textContent = message;
+    mountEl.appendChild(el);
+}
+
+async function mountUserModule(view) {
+    const mountEl = document.getElementById("module-root");
+    if (!mountEl) return;
+
+    destroyActiveUserModule();
+
+    const ModuleClass = USER_MODULES[view] || EditUser;
+    activeUserModule = new ModuleClass({
+        mount: mountEl,
+        username: userState.selectedUsername
+    });
+
+    try {
+        await activeUserModule.init();
+        activeUserModule?.setUser?.(userState.selectedUsername);
+        if (userState.selectedUserInfo) {
+            activeUserModule?.setData?.(userState.selectedUserInfo);
+        }
+    } catch (error) {
+        renderUserModuleState(error?.message || "No se pudo cargar el módulo.", "error");
+    }
+}
+
+function setActiveUserTab(nextTab) {
+    const tabs = document.querySelectorAll(".function-tabs .tab");
+    tabs.forEach((tab) => tab.classList.toggle("is-active", tab === nextTab));
+    userState.activeView = nextTab?.dataset?.view || "edit";
+    mountUserModule(userState.activeView);
+}
+
+async function setSelectedUser(nextItem) {
+    const items = document.querySelectorAll(".user-list .user-item");
+    items.forEach((item) => {
+        const selected = item === nextItem;
+        item.classList.toggle("is-selected", selected);
+        item.setAttribute("aria-selected", selected ? "true" : "false");
+    });
+
+    userState.selectedUsername = nextItem?.dataset?.username || null;
+    userState.selectedUserInfo = null;
+    const requestId = ++userState.selectedUserRequestId;
+
+    if (userState.selectedUsername) {
+        setUserHint(`Usuario seleccionado: ${userState.selectedUsername}`, "info");
+    }
+
+    activeUserModule?.setUser?.(userState.selectedUsername);
+    if (!userState.selectedUsername) return;
+
+    activeUserModule?.setLoading?.(true);
+    try {
+        const data = await fetchUserInfo(userState.selectedUsername);
+        if (requestId !== userState.selectedUserRequestId) return;
+        if (!data) {
+            setUserHint("No se encontró información del usuario.", "error");
+            activeUserModule?.setStatus?.("No se encontró información del usuario.");
+            return;
+        }
+        userState.selectedUserInfo = data;
+        activeUserModule?.setData?.(data);
+    } catch (error) {
+        if (requestId !== userState.selectedUserRequestId) return;
+        const message = error?.message || "No se pudo cargar la información.";
+        setUserHint(message, "error");
+        activeUserModule?.setStatus?.(message);
+    } finally {
+        if (requestId === userState.selectedUserRequestId) {
+            activeUserModule?.setLoading?.(false);
+        }
+    }
+}
+
+function createUserItem(username) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "user-item";
+    btn.setAttribute("role", "option");
+    btn.setAttribute("aria-selected", "false");
+    btn.dataset.username = username;
+
+    const avatar = document.createElement("span");
+    avatar.className = "user-avatar";
+    avatar.setAttribute("aria-hidden", "true");
+
+    const meta = document.createElement("span");
+    meta.className = "user-meta";
+
+    const name = document.createElement("span");
+    name.className = "user-name";
+    name.textContent = username;
+
+    const sub = document.createElement("span");
+    sub.className = "user-sub";
+    sub.textContent = "Pulsa para seleccionar";
+
+    meta.appendChild(name);
+    meta.appendChild(sub);
+    btn.appendChild(avatar);
+    btn.appendChild(meta);
+
+    btn.addEventListener("click", () => setSelectedUser(btn));
+    return btn;
+}
+
+function renderUserList(usernames) {
+    const listEl = document.getElementById("user-list");
+    if (!listEl) return;
+    listEl.innerHTML = "";
+    userState.selectedUsername = null;
+    userState.selectedUserInfo = null;
+
+    if (!Array.isArray(usernames) || usernames.length === 0) {
+        renderUserListState("Sin resultados.", "info");
+        return;
+    }
+
+    usernames.forEach((username) => {
+        const item = createUserItem(String(username));
+        listEl.appendChild(item);
+    });
+}
+
+function removeUserFromList(username) {
+    if (!username) return;
+    const listEl = document.getElementById("user-list");
+    if (!listEl) return;
+
+    let removed = false;
+    document.querySelectorAll(".user-list .user-item").forEach((item) => {
+        if (item.dataset.username === username) {
+            item.remove();
+            removed = true;
+        }
+    });
+
+    if (removed && listEl.children.length === 0) {
+        renderUserListState("Sin resultados.", "info");
+    }
+}
+
+async function searchUsers(username, limit = 10) {
+    const auth = getAuthHeader();
+    if (!auth) {
+        throw new Error("Necesitas iniciar sesión para buscar usuarios.");
+    }
+
+    const url = new URL(`${window.location.origin}${SEARCH_USERS_ENDPOINT}/${encodeURIComponent(username)}`);
+    url.searchParams.set("limit", String(limit));
+
+    const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: { Authorization: auth }
+    });
+
+    if (response.status === 401) {
+        setUserHint("Sesión expirada. Redirigiendo a login...", "error");
+        setTimeout(() => {
+            window.location.href = new URL(LOGIN_PATH, window.location.origin).toString();
+        }, 400);
+        return [];
+    }
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+        throw new Error(data?.detail || "No se pudo buscar usuarios.");
+    }
+
+    return Array.isArray(data) ? data : [];
+}
+
+async function fetchUserInfo(username) {
+    const auth = getAuthHeader();
+    if (!auth) {
+        throw new Error("Necesitas iniciar sesión para ver la información.");
+    }
+
+    const url = new URL(`${window.location.origin}/userconf/get_userinfo/${encodeURIComponent(username)}`);
+    const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: { Authorization: auth }
+    });
+
+    if (response.status === 401) {
+        setUserHint("Sesión expirada. Redirigiendo a login...", "error");
+        setTimeout(() => {
+            window.location.href = new URL(LOGIN_PATH, window.location.origin).toString();
+        }, 400);
+        return null;
+    }
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+        throw new Error(data?.detail || "No se pudo cargar la información del usuario.");
+    }
+
+    return data;
+}
+
+function debounce(fn, delayMs) {
+    let timeoutId = null;
+    return (...args) => {
+        if (timeoutId) window.clearTimeout(timeoutId);
+        timeoutId = window.setTimeout(() => fn(...args), delayMs);
+    };
+}
+
+async function runUserSearch() {
+    const input = document.getElementById("user-search");
+    const query = (input?.value || "").trim();
+    const requestId = ++userState.searchRequestId;
+
+    if (!query) {
+        userState.selectedUsername = null;
+        userState.selectedUserInfo = null;
+        setUserHint("Escribe para buscar usuarios.", "info");
+        renderUserListState("Escribe para buscar.", "info");
+        activeUserModule?.setUser?.(userState.selectedUsername);
+        return;
+    }
+
+    setUserHint("Buscando...", "info");
+    renderUserListState("Buscando...", "loading");
+
+    try {
+        const usernames = await searchUsers(query);
+        if (requestId !== userState.searchRequestId) return;
+        renderUserList(usernames);
+        setUserHint(usernames.length ? `Resultados: ${usernames.length}` : "Sin resultados.", "info");
+    } catch (error) {
+        if (requestId !== userState.searchRequestId) return;
+        const message = error?.message || "Error al buscar usuarios.";
+        setUserHint(message, "error");
+        renderUserListState(message, "error");
+    }
+}
+
 function renderSimpleSection(section) {
     return `
         <div class="simple-layout">
@@ -595,6 +995,19 @@ saveButton?.addEventListener("click", () => {
     if (activeSectionKey === "company") {
         saveCompanyProfile();
         return;
+    }
+});
+
+window.addEventListener("userconf:deleted", (event) => {
+    const deletedUsername = event?.detail?.username;
+    if (!deletedUsername) return;
+
+    removeUserFromList(deletedUsername);
+    if (userState.selectedUsername === deletedUsername) {
+        userState.selectedUsername = null;
+        userState.selectedUserInfo = null;
+        setUserHint("Usuario eliminado.", "info");
+        activeUserModule?.setUser?.(null);
     }
 });
 
