@@ -527,6 +527,106 @@ svg {
     line-height: 1.5;
 }
 
+.simple-card strong {
+    color: var(--text);
+}
+
+.company-layout {
+    display: grid;
+    gap: 26px;
+}
+
+.company-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 22px;
+}
+
+.company-panel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px;
+}
+
+.company-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 26px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+}
+
+.company-panel:nth-child(3) {
+    grid-column: 1 / -1;
+}
+
+.company-panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.company-panel-header h3 {
+    margin: 0 0 8px;
+    font-size: 1.18rem;
+}
+
+.company-panel-header p {
+    max-width: 620px;
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.45;
+}
+
+.company-field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.company-panel:nth-child(3) .company-field-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.company-field {
+    min-width: 0;
+    padding: 16px;
+    background: var(--panel-soft);
+    border: 1px solid #e4ebf5;
+    border-radius: 8px;
+}
+
+.field-label,
+.company-field code {
+    display: block;
+    color: var(--muted-2);
+    font-size: 0.78rem;
+}
+
+.field-value {
+    display: block;
+    margin: 7px 0;
+    color: var(--text);
+    font-size: 0.98rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.company-field code {
+    width: fit-content;
+    max-width: 100%;
+    padding: 4px 7px;
+    color: var(--blue-2);
+    background: #fff;
+    border: 1px solid #d8e6f7;
+    border-radius: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    overflow-wrap: anywhere;
+}
+
 .setting-row {
     display: flex;
     align-items: center;
@@ -664,8 +764,18 @@ svg {
 
     .section-hero,
     .panels-grid,
-    .simple-grid {
+    .simple-grid,
+    .company-summary-grid,
+    .company-panel-grid {
         grid-template-columns: 1fr;
+    }
+
+    .company-panel:nth-child(3) {
+        grid-column: auto;
+    }
+
+    .company-panel:nth-child(3) .company-field-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .summary-grid {
@@ -746,8 +856,19 @@ svg {
     }
 
     .summary-grid,
-    .simple-grid {
+    .simple-grid,
+    .company-summary-grid,
+    .company-field-grid,
+    .company-panel:nth-child(3) .company-field-grid {
         grid-template-columns: 1fr;
+    }
+
+    .company-panel {
+        padding: 22px 18px;
+    }
+
+    .company-panel-header {
+        flex-direction: column;
     }
 
     .metric-card {

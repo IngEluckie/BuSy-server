@@ -25,7 +25,7 @@ CURRENT_BUSY_FORMAT_VERSION = 2
 # Any SQLite schema change must add a DB migration and bump
 # CURRENT_DATABASE_SCHEMA_VERSION. SQLite uses PRAGMA user_version as source
 # of truth for the active database schema version.
-CURRENT_DATABASE_SCHEMA_VERSION = 2
+CURRENT_DATABASE_SCHEMA_VERSION = 3
 
 
 class BusyPaths:

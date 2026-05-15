@@ -69,16 +69,7 @@ const sections = {
     company: {
         title: "Datos de la empresa",
         description: "Administra la identidad visible del negocio y los datos base usados en documentos.",
-        cards: [
-            ["Nombre comercial", "Business System Demo configurado como cuenta principal."],
-            ["Sucursal activa", "Matriz operativa con punto de venta, almacén y administración."],
-            ["Zona horaria", "America/Mexico_City para reportes, movimientos y cortes diarios."]
-        ],
-        rows: [
-            ["RFC", "BUS260515A10"],
-            ["Correo de contacto", "admin@business-system.local"],
-            ["Teléfono", "+52 55 1234 5678"]
-        ]
+        content: renderCompanySection
     },
     settings: {
         title: "Preferencias globales",
@@ -210,6 +201,111 @@ function renderUpcoming(title, description, icon) {
             </div>
             <span class="badge purple">Próximamente</span>
         </li>
+    `;
+}
+
+const companyFieldGroups = [
+    {
+        title: "Identidad fiscal",
+        description: "Datos legales usados en documentos, reportes y comprobantes.",
+        fields: [
+            ["Razón social", "legal_name", "Pendiente de capturar"],
+            ["Nombre comercial", "trade_name", "Business System Demo"],
+            ["RFC", "rfc", "Pendiente de capturar"],
+            ["Régimen fiscal", "tax_regime", "Pendiente de capturar"]
+        ]
+    },
+    {
+        title: "Contacto",
+        description: "Canales visibles para clientes, proveedores y documentos emitidos.",
+        fields: [
+            ["Correo electrónico", "email", "admin@business-system.local"],
+            ["Teléfono", "phone", "+52 55 1234 5678"],
+            ["Sitio web", "website", "https://business-system.local"]
+        ]
+    },
+    {
+        title: "Dirección",
+        description: "Ubicación fiscal y operativa registrada para la empresa.",
+        fields: [
+            ["Calle", "street", "Pendiente de capturar"],
+            ["Número exterior", "exterior_number", "Pendiente"],
+            ["Número interior", "interior_number", "Sin interior"],
+            ["Colonia", "neighborhood", "Pendiente de capturar"],
+            ["Ciudad", "city", "Ciudad de México"],
+            ["Estado", "state", "CDMX"],
+            ["País", "country", "México"],
+            ["Código postal", "postal_code", "Pendiente"]
+        ]
+    },
+    {
+        title: "Configuración regional",
+        description: "Preferencias base para importes, idioma, fechas y horarios.",
+        fields: [
+            ["Moneda", "currency", "MXN"],
+            ["Zona horaria", "timezone", "America/Mexico_City"],
+            ["Idioma/región", "locale", "es-MX"]
+        ]
+    },
+    {
+        title: "Marca y documentos",
+        description: "Recursos visuales usados en tickets, reportes y documentos del sistema.",
+        fields: [
+            ["Ruta del logotipo", "logo_path", "Pendiente de cargar"]
+        ]
+    }
+];
+
+function renderCompanySection() {
+    return `
+        <div class="company-layout">
+            <div class="section-copy">
+                <h2>Datos de la empresa</h2>
+                <p>Administra la identidad visible del negocio y los datos base usados en documentos.</p>
+            </div>
+
+            <div class="company-summary-grid">
+                <article class="simple-card">
+                    <h3>Perfil activo</h3>
+                    <p>Registro único de empresa vinculado a <strong>company_profile.id = 1</strong>.</p>
+                </article>
+                <article class="simple-card">
+                    <h3>Datos fiscales</h3>
+                    <p>Razón social, RFC y régimen fiscal listos para completar.</p>
+                </article>
+                <article class="simple-card">
+                    <h3>Uso documental</h3>
+                    <p>Estos espacios alimentarán tickets, reportes, respaldos y formatos impresos.</p>
+                </article>
+            </div>
+
+            <div class="company-panel-grid">
+                ${companyFieldGroups.map(renderCompanyGroup).join("")}
+            </div>
+        </div>
+    `;
+}
+
+function renderCompanyGroup(group) {
+    return `
+        <article class="company-panel">
+            <header class="company-panel-header">
+                <div>
+                    <h3>${group.title}</h3>
+                    <p>${group.description}</p>
+                </div>
+                <span class="value-chip">Mock</span>
+            </header>
+            <div class="company-field-grid">
+                ${group.fields.map(([label, key, value]) => `
+                    <div class="company-field">
+                        <span class="field-label">${label}</span>
+                        <strong class="field-value">${value}</strong>
+                        <code>${key}</code>
+                    </div>
+                `).join("")}
+            </div>
+        </article>
     `;
 }
 

@@ -99,6 +99,11 @@ def migrate_database(
                 current_version = 2
                 continue
 
+            if current_version == 2:
+                _migrate_database_2_to_3(cursor)
+                current_version = 3
+                continue
+
             raise RuntimeError(
                 f"No existe migracion para base de datos version {current_version}."
             )
@@ -308,5 +313,59 @@ def _migrate_database_1_to_2(cursor: sqlite3.Cursor) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_inventory_adjustments_product_id
         ON inventory_adjustments(product_id)
+        """
+    )
+
+
+def _migrate_database_2_to_3(cursor: sqlite3.Cursor) -> None:
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS company_profile (
+            id INTEGER NOT NULL DEFAULT 1
+                CHECK (id = 1),
+            legal_name TEXT NOT NULL DEFAULT '',
+            trade_name TEXT NOT NULL DEFAULT '',
+            rfc TEXT NOT NULL DEFAULT '',
+            tax_regime TEXT NOT NULL DEFAULT '',
+            email TEXT NOT NULL DEFAULT '',
+            phone TEXT NOT NULL DEFAULT '',
+            website TEXT NOT NULL DEFAULT '',
+            street TEXT NOT NULL DEFAULT '',
+            exterior_number TEXT NOT NULL DEFAULT '',
+            interior_number TEXT NOT NULL DEFAULT '',
+            neighborhood TEXT NOT NULL DEFAULT '',
+            city TEXT NOT NULL DEFAULT '',
+            state TEXT NOT NULL DEFAULT '',
+            country TEXT NOT NULL DEFAULT 'México',
+            postal_code TEXT NOT NULL DEFAULT '',
+            logo_path TEXT NOT NULL DEFAULT '',
+            currency TEXT NOT NULL DEFAULT 'MXN',
+            timezone TEXT NOT NULL DEFAULT 'America/Mexico_City',
+            locale TEXT NOT NULL DEFAULT 'es-MX',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(id)
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        INSERT OR IGNORE INTO company_profile (
+            id,
+            legal_name,
+            trade_name,
+            rfc,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            1,
+            '',
+            'Business System Demo',
+            '',
+            datetime('now'),
+            datetime('now')
+        )
         """
     )
