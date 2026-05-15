@@ -101,8 +101,136 @@ const sections = {
     }
 };
 
+const LOGIN_PATH = "/login/";
+const COMPANY_PROFILE_ENDPOINT = "/systemconf/company-profile";
+const COMPANY_FIELD_DEFAULTS = {
+    legal_name: "",
+    trade_name: "Business System Demo",
+    rfc: "",
+    tax_regime: "",
+    email: "admin@business-system.local",
+    phone: "+52 55 1234 5678",
+    website: "https://business-system.local",
+    street: "",
+    exterior_number: "",
+    interior_number: "",
+    neighborhood: "",
+    city: "Ciudad de México",
+    state: "CDMX",
+    country: "México",
+    postal_code: "",
+    logo_path: "",
+    currency: "MXN",
+    timezone: "America/Mexico_City",
+    locale: "es-MX"
+};
+
 const sectionContent = document.querySelector("#sectionContent");
 const tabButtons = document.querySelectorAll(".tab-button");
+const saveButton = document.querySelector(".save-button");
+
+let activeSectionKey = "system";
+let companyProfile = null;
+let companyRequestId = 0;
+const companyUi = {
+    isLoading: false,
+    isSaving: false,
+    message: "Carga los datos registrados para editarlos.",
+    kind: "info"
+};
+
+function getAuthHeader() {
+    const token = localStorage.getItem("busy_token");
+    const tokenType = localStorage.getItem("busy_token_type") || "bearer";
+    if (!token) return null;
+    return `${tokenType} ${token}`;
+}
+
+async function apiFetch(url, options = {}) {
+    const auth = getAuthHeader();
+    if (!auth) {
+        window.location.href = LOGIN_PATH;
+        throw new Error("Sesión requerida.");
+    }
+
+    const response = await fetch(url, {
+        ...options,
+        headers: {
+            Authorization: auth,
+            ...(options.headers || {})
+        }
+    });
+
+    if (response.status === 401) {
+        window.location.href = LOGIN_PATH;
+        throw new Error("Sesión expirada.");
+    }
+
+    if (!response.ok) {
+        let detail = "No se pudo completar la operación.";
+        try {
+            const body = await response.json();
+            detail = body?.detail || detail;
+        } catch {
+            detail = response.statusText || detail;
+        }
+        throw new Error(detail);
+    }
+
+    return response;
+}
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+}
+
+function getCompanyValue(key) {
+    const value = companyProfile?.[key];
+    if (value === undefined || value === null) return COMPANY_FIELD_DEFAULTS[key] || "";
+    return value;
+}
+
+function setCompanyUi(message, kind = "info", state = {}) {
+    companyUi.message = message;
+    companyUi.kind = kind;
+    companyUi.isLoading = Boolean(state.isLoading);
+    companyUi.isSaving = Boolean(state.isSaving);
+
+    const statusEl = document.querySelector("[data-company-status]");
+    if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.dataset.kind = kind;
+    }
+
+    document.querySelectorAll(".company-field input").forEach((input) => {
+        input.disabled = companyUi.isLoading || companyUi.isSaving;
+    });
+
+    if (saveButton) {
+        saveButton.disabled = companyUi.isLoading || companyUi.isSaving;
+    }
+}
+
+function renderActiveSection() {
+    const section = sections[activeSectionKey] || sections.system;
+    sectionContent.innerHTML = section.content ? section.content() : renderSimpleSection(section);
+
+    if (activeSectionKey === "company") {
+        setCompanyUi(companyUi.message, companyUi.kind, {
+            isLoading: companyUi.isLoading,
+            isSaving: companyUi.isSaving
+        });
+        return;
+    }
+
+    if (saveButton) {
+        saveButton.disabled = false;
+    }
+}
 
 function renderSystemSection() {
     return `
@@ -209,10 +337,10 @@ const companyFieldGroups = [
         title: "Identidad fiscal",
         description: "Datos legales usados en documentos, reportes y comprobantes.",
         fields: [
-            ["Razón social", "legal_name", "Pendiente de capturar"],
+            ["Razón social", "legal_name", "Ej. Business System S.A. de C.V."],
             ["Nombre comercial", "trade_name", "Business System Demo"],
-            ["RFC", "rfc", "Pendiente de capturar"],
-            ["Régimen fiscal", "tax_regime", "Pendiente de capturar"]
+            ["RFC", "rfc", "Ej. BUS260515A10"],
+            ["Régimen fiscal", "tax_regime", "Ej. Régimen General de Ley"]
         ]
     },
     {
@@ -228,14 +356,14 @@ const companyFieldGroups = [
         title: "Dirección",
         description: "Ubicación fiscal y operativa registrada para la empresa.",
         fields: [
-            ["Calle", "street", "Pendiente de capturar"],
-            ["Número exterior", "exterior_number", "Pendiente"],
-            ["Número interior", "interior_number", "Sin interior"],
-            ["Colonia", "neighborhood", "Pendiente de capturar"],
+            ["Calle", "street", "Ej. Avenida Principal"],
+            ["Número exterior", "exterior_number", "Ej. 123"],
+            ["Número interior", "interior_number", "Ej. Local 4"],
+            ["Colonia", "neighborhood", "Ej. Centro"],
             ["Ciudad", "city", "Ciudad de México"],
             ["Estado", "state", "CDMX"],
             ["País", "country", "México"],
-            ["Código postal", "postal_code", "Pendiente"]
+            ["Código postal", "postal_code", "Ej. 06000"]
         ]
     },
     {
@@ -251,12 +379,16 @@ const companyFieldGroups = [
         title: "Marca y documentos",
         description: "Recursos visuales usados en tickets, reportes y documentos del sistema.",
         fields: [
-            ["Ruta del logotipo", "logo_path", "Pendiente de cargar"]
+            ["Ruta del logotipo", "logo_path", "Ej. storage/images/logo.png"]
         ]
     }
 ];
 
 function renderCompanySection() {
+    const metadata = companyProfile
+        ? `Actualizado: ${formatDateTime(companyProfile.updated_at)}`
+        : "Esperando datos del sistema";
+
     return `
         <div class="company-layout">
             <div class="section-copy">
@@ -274,14 +406,19 @@ function renderCompanySection() {
                     <p>Razón social, RFC y régimen fiscal listos para completar.</p>
                 </article>
                 <article class="simple-card">
-                    <h3>Uso documental</h3>
-                    <p>Estos espacios alimentarán tickets, reportes, respaldos y formatos impresos.</p>
+                    <h3>Sincronización</h3>
+                    <p>${metadata}</p>
                 </article>
             </div>
 
-            <div class="company-panel-grid">
-                ${companyFieldGroups.map(renderCompanyGroup).join("")}
-            </div>
+            <form id="companyProfileForm" class="company-form">
+                <div class="company-status" data-company-status data-kind="${companyUi.kind}">
+                    ${escapeHtml(companyUi.message)}
+                </div>
+                <div class="company-panel-grid">
+                    ${companyFieldGroups.map(renderCompanyGroup).join("")}
+                </div>
+            </form>
         </div>
     `;
 }
@@ -294,19 +431,100 @@ function renderCompanyGroup(group) {
                     <h3>${group.title}</h3>
                     <p>${group.description}</p>
                 </div>
-                <span class="value-chip">Mock</span>
+                <span class="value-chip">Editable</span>
             </header>
             <div class="company-field-grid">
-                ${group.fields.map(([label, key, value]) => `
+                ${group.fields.map(([label, key, placeholder]) => `
                     <div class="company-field">
-                        <span class="field-label">${label}</span>
-                        <strong class="field-value">${value}</strong>
+                        <label class="field-label" for="company-${key}">${label}</label>
+                        <input
+                            class="field-value"
+                            id="company-${key}"
+                            name="${key}"
+                            type="${getCompanyInputType(key)}"
+                            value="${escapeHtml(getCompanyValue(key))}"
+                            placeholder="${escapeHtml(placeholder)}"
+                            autocomplete="off"
+                            ${companyUi.isLoading || companyUi.isSaving ? "disabled" : ""}
+                        >
                         <code>${key}</code>
                     </div>
                 `).join("")}
             </div>
         </article>
     `;
+}
+
+function getCompanyInputType(key) {
+    if (key === "email") return "email";
+    if (key === "website") return "url";
+    if (key === "phone") return "tel";
+    return "text";
+}
+
+function formatDateTime(value) {
+    if (!value) return "sin fecha";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString("es-MX", {
+        dateStyle: "medium",
+        timeStyle: "short"
+    });
+}
+
+async function loadCompanyProfile() {
+    const requestId = ++companyRequestId;
+    setCompanyUi("Cargando datos de empresa...", "loading", { isLoading: true });
+
+    try {
+        const response = await apiFetch(COMPANY_PROFILE_ENDPOINT);
+        const profile = await response.json();
+        if (requestId !== companyRequestId || activeSectionKey !== "company") return;
+        companyProfile = profile;
+        companyUi.message = "Datos cargados. Puedes editar y guardar cambios.";
+        companyUi.kind = "success";
+        companyUi.isLoading = false;
+        companyUi.isSaving = false;
+        renderActiveSection();
+    } catch (error) {
+        if (requestId !== companyRequestId || activeSectionKey !== "company") return;
+        setCompanyUi(error?.message || "No se pudieron cargar los datos de empresa.", "error");
+    }
+}
+
+function collectCompanyPayload() {
+    const form = document.querySelector("#companyProfileForm");
+    if (!form) return null;
+
+    const payload = {};
+    companyFieldGroups.flatMap((group) => group.fields).forEach(([, key]) => {
+        const input = form.elements[key];
+        payload[key] = input ? input.value.trim() : "";
+    });
+    return payload;
+}
+
+async function saveCompanyProfile() {
+    const payload = collectCompanyPayload();
+    if (!payload) return;
+
+    setCompanyUi("Guardando cambios...", "loading", { isSaving: true });
+
+    try {
+        const response = await apiFetch(COMPANY_PROFILE_ENDPOINT, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        companyProfile = await response.json();
+        companyUi.message = "Datos de empresa guardados correctamente.";
+        companyUi.kind = "success";
+        companyUi.isLoading = false;
+        companyUi.isSaving = false;
+        renderActiveSection();
+    } catch (error) {
+        setCompanyUi(error?.message || "No se pudieron guardar los datos de empresa.", "error");
+    }
 }
 
 function renderSimpleSection(section) {
@@ -352,6 +570,7 @@ function renderSimpleSection(section) {
 
 function setActiveSection(sectionKey) {
     const section = sections[sectionKey] || sections.system;
+    activeSectionKey = sectionKey;
 
     tabButtons.forEach((button) => {
         const isActive = button.dataset.section === sectionKey;
@@ -359,13 +578,24 @@ function setActiveSection(sectionKey) {
         button.setAttribute("aria-pressed", String(isActive));
     });
 
-    sectionContent.innerHTML = section.content ? section.content() : renderSimpleSection(section);
+    renderActiveSection();
+
+    if (sectionKey === "company") {
+        loadCompanyProfile();
+    }
 }
 
 tabButtons.forEach((button) => {
     button.addEventListener("click", () => {
         setActiveSection(button.dataset.section);
     });
+});
+
+saveButton?.addEventListener("click", () => {
+    if (activeSectionKey === "company") {
+        saveCompanyProfile();
+        return;
+    }
 });
 
 setActiveSection("system");

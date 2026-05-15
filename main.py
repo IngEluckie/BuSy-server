@@ -23,7 +23,7 @@ import os
 
 # Import modules
 from databases.singleton import Database
-from routers import authentication, respaldos, userconf
+from routers import authentication, respaldos, systemConf, userconf
 from routers.pos_operations.operaciones import articulos
 from utilities.handleDocument.document import BusyPaths
 from utilities.scheduler.scheduler import Scheduler
@@ -35,6 +35,7 @@ app.include_router(authentication.router_authentication)
 app.include_router(userconf.router_userconf)
 app.include_router(respaldos.router_respaldos)
 app.include_router(articulos.router_articulos)
+app.include_router(systemConf.router_systemconf)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # O especifica tu dominio 'http://localhost:5500', etc.

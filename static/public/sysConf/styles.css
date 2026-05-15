@@ -542,6 +542,37 @@ svg {
     gap: 22px;
 }
 
+.company-form {
+    display: grid;
+    gap: 18px;
+}
+
+.company-status {
+    width: fit-content;
+    max-width: 100%;
+    padding: 10px 14px;
+    color: var(--blue-2);
+    background: var(--blue-soft);
+    border-radius: 999px;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.company-status[data-kind="success"] {
+    color: var(--green);
+    background: var(--green-soft);
+}
+
+.company-status[data-kind="error"] {
+    color: #bc2f2f;
+    background: #fff0f0;
+}
+
+.company-status[data-kind="loading"] {
+    color: var(--muted);
+    background: #eef2f7;
+}
+
 .company-panel-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -615,6 +646,27 @@ svg {
     overflow-wrap: anywhere;
 }
 
+.company-field input.field-value {
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 11px;
+    background: #fff;
+    border: 1px solid #d8e6f7;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.company-field input.field-value:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(20, 118, 242, 0.13);
+}
+
+.company-field input.field-value:disabled {
+    color: var(--muted-2);
+    background: #f2f5f9;
+}
+
 .company-field code {
     width: fit-content;
     max-width: 100%;
@@ -681,6 +733,12 @@ svg {
     transform: translateY(-1px);
     box-shadow: 0 18px 32px rgba(20, 118, 242, 0.34);
     outline: none;
+}
+
+.save-button:disabled {
+    cursor: wait;
+    opacity: 0.7;
+    transform: none;
 }
 
 .save-button svg {
